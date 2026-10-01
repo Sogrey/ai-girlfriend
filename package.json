@@ -1,0 +1,19 @@
+{
+  "name": "desktop-ai-girlfriend",
+  "version": "1.0.0",
+  "description": "3D Desktop AI Girlfriend - Electron + Three.js VRM + Local LLM (Ollama) + Faster-Whisper + Edge-TTS",
+  "main": "electron/main.js",
+  "author": "user",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "node scripts/check-deps.js"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "^3.3.2",
+    "three": "^0.174.0"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0"
+  }
+}

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D 桌面 AI 女友 · 开发进度看板</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { min-height: 100%; }
+body {
+  position: relative;
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Noto Sans SC", sans-serif;
+  color: #1f2d3d;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  background: linear-gradient(160deg, #f8fafc 0%, #ffffff 45%, #cfe0f5 100%);
+  min-height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 45% 35% at 18% 8%, rgba(255,255,255,0.55) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 88% 90%, rgba(255,255,255,0.45) 0%, transparent 55%);
+}
+body > * { position: relative; z-index: 1; }
+
+/* ===== 封面状态面板 ===== */
+.title {
+  position: relative;
+  overflow: hidden;
+  padding: 48px 40px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 50%, #4f8ef7 100%);
+  color: #ffffff;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+.title::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 18% 82%, rgba(255,255,255,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 82% 18%, rgba(255,255,255,0.08) 0%, transparent 55%);
+  pointer-events: none;
+}
+.title > * { position: relative; z-index: 1; }
+.title h1 { font-size: 28px; font-weight: 800; margin: 0 0 10px 0; letter-spacing: 1px; color: #ffffff; }
+.title .subtitle { font-size: 15px; color: rgba(255,255,255,0.85); margin: 0 0 20px 0; line-height: 1.7; }
+.title .title-meta { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 20px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.18); }
+.title .meta-item { display: flex; flex-direction: column; }
+.title .meta-item .value { font-size: 22px; font-weight: 700; color: #ffffff; }
+.title .meta-item .label { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 2px; }
+
+/* ===== 状态胶囊 ===== */
+.status-pill {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-pill.success { background: #16a34a; color: #ffffff; }
+.status-pill.warning { background: #FFF3E0; color: #E65100; }
+.status-pill.pending { background: #e8f0fe; color: #2563eb; }
+.status-pill.danger  { background: #FCE4EC; color: #C62828; }
+
+/* ===== 章节标题 ===== */
+h1.heading {
+  font-size: 28px;
+  color: #0f1e33;
+  margin: 36px 0 16px 0;
+  font-weight: 700;
+  border-left: 4px solid #3b82f6;
+  padding-left: 16px;
+}
+h2.heading {
+  font-size: 22px;
+  color: #0f1e33;
+  margin: 28px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #c9d6f3;
+  font-weight: 600;
+}
+h3.heading { font-size: 17px; color: #0f1e33; margin: 20px 0 10px; font-weight: 600; }
+
+/* ===== stat 指标卡 ===== */
+.stat-grid { display: flex; gap: 16px; margin: 0 0 16px 0; }
+.stat {
+  flex: 1;
+  text-align: center;
+  padding: 24px 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  border-top: 3px solid #3b82f6;
+}
+.stat .num { font-size: 30px; color: #3b82f6; font-weight: 800; line-height: 1.1; }
+.stat .label { font-size: 12px; color: #5b6b80; margin-top: 6px; }
+.stat.green { border-top-color: #16a34a; } .stat.green .num { color: #16a34a; }
+.stat.orange { border-top-color: #d97706; } .stat.orange .num { color: #d97706; }
+.stat.gray { border-top-color: #6b7280; } .stat.gray .num { color: #6b7280; }
+
+/* ===== 进度条（纯 CSS，无 JS） ===== */
+.progress-legend { display: flex; gap: 20px; flex-wrap: wrap; margin: 0 0 16px 0; font-size: 13px; color: #5b6b80; }
+.progress-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.progress-group { background: #ffffff; border-radius: 12px; padding: 20px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); margin: 0 0 16px 0; }
+.progress-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.progress-row:last-child { margin-bottom: 0; }
+.progress-row .p-label { width: 110px; font-size: 13px; color: #1f2d3d; font-weight: 600; flex-shrink: 0; }
+.progress-track { flex: 1; height: 12px; background: #e6edf6; border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #2563eb, #4f8ef7); }
+.progress-fill.full { background: linear-gradient(90deg, #15803d, #16a34a); }
+.progress-fill.mid { background: linear-gradient(90deg, #d97706, #f59e0b); }
+.progress-row .p-val { width: 46px; text-align: right; font-size: 12px; color: #5b6b80; font-weight: 700; flex-shrink: 0; }
+
+/* ===== 任务清单 ===== */
+.task-list { list-style: none; padding: 0; margin: 0 0 16px 0; font-size: 14px; color: #1f2d3d; line-height: 1.75; }
+.task-list li {
+  margin-bottom: 10px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  border-left: 3px solid #c9d6f3;
+}
+.task-list li:hover { border-left-color: #3b82f6; }
+.task-list li strong { color: #0f1e33; }
+.task-list li .desc { color: #5b6b80; font-size: 13px; }
+
+/* ===== timeline ===== */
+.timeline { list-style: none; padding: 0; margin: 0 0 16px 0; }
+.timeline li {
+  position: relative;
+  padding-left: 28px;
+  padding-bottom: 18px;
+  border-left: 2px solid #c9d6f3;
+  margin-left: 6px;
+}
+.timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline li::before {
+  content: '';
+  position: absolute;
+  left: -7px; top: 5px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid #f4f7fb;
+  box-shadow: 0 0 0 2px #c9d6f3;
+}
+.timeline li.done::before { background: #16a34a; }
+.timeline strong { font-size: 14px; color: #2563eb; }
+.timeline li.done strong { color: #16a34a; }
+.timeline p { font-size: 14px; color: #1f2d3d; margin: 4px 0 0 0; line-height: 1.8; }
+.timeline p .desc { color: #5b6b80; }
+
+/* ===== callout ===== */
+.callout {
+  margin: 0 0 16px 0;
+  padding: 16px 24px;
+  background: #e8f0fe;
+  border-left: 4px solid #3b82f6;
+  border-radius: 8px;
+}
+.callout[data-variant="warning"] { background: #FFF3E0; border-left-color: #d97706; }
+.callout p { font-size: 14px; color: #1f2d3d; margin: 0; line-height: 1.8; }
+.callout strong { color: #0f1e33; }
+
+/* ===== list ===== */
+.list { margin: 0 0 16px 0; padding-left: 24px; font-size: 14px; color: #1f2d3d; line-height: 1.8; }
+.list li { margin-bottom: 8px; }
+.list li::marker { color: #3b82f6; }
+.list li .desc { color: #5b6b80; font-size: 13px; }
+.list.pending-list li::marker { color: #6b7280; }
+
+/* ===== table ===== */
+.table-wrap { background: #ffffff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; margin: 0 0 16px 0; }
+.table-caption {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #c9d6f3, #e8f0fe);
+  color: #0f1e33;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 1px solid #dbe4ef;
+}
+table.table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+table.table thead th {
+  padding: 11px 14px;
+  text-align: left;
+  background: #c9d6f3;
+  color: #0f1e33;
+  font-weight: 700;
+  border-bottom: 2px solid #dbe4ef;
+  word-break: break-word;
+}
+table.table tbody td { padding: 11px 14px; border-bottom: 1px solid #dbe4ef; color: #1f2d3d; word-break: break-word; vertical-align: top; }
+table.table tbody tr:last-child td { border-bottom: none; }
+table.table tbody tr:hover { background: #e8f0fe; }
+
+/* ===== 尾页 ===== */
+.end_page {
+  margin-top: 24px;
+  padding: 48px 24px;
+  text-align: center;
+  background: linear-gradient(135deg, #c9d6f3 0%, #e8f0fe 100%);
+  border-radius: 16px;
+}
+.end_page h1 { font-size: 26px; color: #0f1e33; margin: 0 0 14px 0; font-weight: 800; }
+.end_page p { font-size: 14px; color: #5b6b80; margin: 0; line-height: 1.8; }
+
+@media screen and (max-width: 600px) {
+  body { padding: 16px !important; }
+  h1 { font-size: 22px !important; }
+  h2 { font-size: 18px !important; }
+  h3 { font-size: 16px !important; }
+  .stat-grid { flex-direction: column; }
+  .progress-row .p-label { width: 88px; }
+  .title { padding: 40px 24px; }
+}
+@media print {
+  body { padding: 0 !important; margin: 0 !important; background: #f4f7fb; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body::before { display: none; }
+  .title { border-radius: 0; box-shadow: none; }
+  .stat, .task-list li, .progress-group, .table-wrap { box-shadow: none; border: 1px solid #dbe4ef; }
+  section { break-inside: auto !important; }
+}
+</style>
+</head>
+<body class="mode-status" data-palette="ink-blue">
+
+  <!-- ===== 封面：状态面板 ===== -->
+  <section class="title">
+    <h1>3D 桌面 AI 女友 · 开发进度看板</h1>
+    <p class="subtitle">Desktop AI Girlfriend — Electron 34 + Three.js VRM + DeepSeek + Faster-Whisper + Edge-TTS</p>
+    <div class="title-meta">
+      <div class="meta-item"><span class="value">85%</span><span class="label">整体完成度（含待确认项）</span></div>
+      <div class="meta-item"><span class="value">77 / 96</span><span class="label">功能需求已验证</span></div>
+      <div class="meta-item"><span class="value">14</span><span class="label">待开发需求</span></div>
+      <div class="meta-item"><span class="value">12</span><span class="label">累计修复缺陷</span></div>
+      <div class="meta-item"><span class="value">v1.0.1</span><span class="label">当前基线</span></div>
+    </div>
+  </section>
+
+  <!-- ===== 图例说明 ===== -->
+  <aside class="callout">
+    <p><strong>状态图例：</strong>
+      <span class="status-pill success">已完成已验证</span> 代码交付且自动化/实测验证通过
+      <span class="status-pill warning">待人工确认</span> 代码交付，需真实环境人工体验后转绿
+      <span class="status-pill pending">待开发</span> 列入 Backlog 排期
+    </p>
+  </aside>
+
+  <!-- ===== 关键指标 ===== -->
+  <h1 class="heading">一、关键指标</h1>
+  <div class="stat-grid" data-cols="4">
+    <div class="stat"><div class="num">96</div><div class="label">功能需求总数</div></div>
+    <div class="stat green"><div class="num">77</div><div class="label">已完成并验证</div></div>
+    <div class="stat orange"><div class="num">5</div><div class="label">待人工确认</div></div>
+    <div class="stat gray"><div class="num">14</div><div class="label">待开发</div></div>
+  </div>
+  <div class="stat-grid" data-cols="4">
+    <div class="stat green"><div class="num">22</div><div class="label">验收标准通过项</div></div>
+    <div class="stat"><div class="num">13</div><div class="label">程序化动作已交付</div></div>
+    <div class="stat"><div class="num">27</div><div class="label">Backlog 待办</div></div>
+    <div class="stat gray"><div class="num">46</div><div class="label">源码文件数</div></div>
+  </div>
+
+  <!-- ===== 模块完成度进度条 ===== -->
+  <h1 class="heading">二、模块完成度</h1>
+  <div class="progress-legend">
+    <span><span class="dot" style="background:linear-gradient(90deg,#15803d,#16a34a);"></span>100% 全部交付</span>
+    <span><span class="dot" style="background:linear-gradient(90deg,#2563eb,#4f8ef7);"></span>≥75% 主体交付</span>
+    <span><span class="dot" style="background:linear-gradient(90deg,#d97706,#f59e0b);"></span>&lt;75% 有明显缺口</span>
+  </div>
+  <div class="progress-group">
+    <div class="progress-row"><span class="p-label">桌面宿主层</span><div class="progress-track"><div class="progress-fill" style="width:91%;"></div></div><span class="p-val">91%</span></div>
+    <div class="progress-row"><span class="p-label">角色系统</span><div class="progress-track"><div class="progress-fill" style="width:100%;"></div></div><span class="p-val">100%</span></div>
+    <div class="progress-row"><span class="p-label">动画系统</span><div class="progress-track"><div class="progress-fill" style="width:87%;"></div></div><span class="p-val">87%</span></div>
+    <div class="progress-row"><span class="p-label">交互系统</span><div class="progress-track"><div class="progress-fill full" style="width:100%;"></div></div><span class="p-val">100%</span></div>
+    <div class="progress-row"><span class="p-label">语音识别 STT</span><div class="progress-track"><div class="progress-fill" style="width:88%;"></div></div><span class="p-val">88%</span></div>
+    <div class="progress-row"><span class="p-label">对话系统 LLM</span><div class="progress-track"><div class="progress-fill" style="width:83%;"></div></div><span class="p-val">83%</span></div>
+    <div class="progress-row"><span class="p-label">语音合成 TTS</span><div class="progress-track"><div class="progress-fill mid" style="width:44%;"></div></div><span class="p-val">44%</span></div>
+    <div class="progress-row"><span class="p-label">口型同步</span><div class="progress-track"><div class="progress-fill" style="width:100%;"></div></div><span class="p-val">100%</span></div>
+    <div class="progress-row"><span class="p-label">离开/返回</span><div class="progress-track"><div class="progress-fill full" style="width:100%;"></div></div><span class="p-val">100%</span></div>
+    <div class="progress-row"><span class="p-label">换装系统</span><div class="progress-track"><div class="progress-fill" style="width:83%;"></div></div><span class="p-val">83%</span></div>
+    <div class="progress-row"><span class="p-label">UI 与设置</span><div class="progress-track"><div class="progress-fill" style="width:83%;"></div></div><span class="p-val">83%</span></div>
+    <div class="progress-row"><span class="p-label">启动与部署</span><div class="progress-track"><div class="progress-fill" style="width:75%;"></div></div><span class="p-val">75%</span></div>
+  </div>
+  <p class="paragraph" style="font-size:12px;color:#5b6b80;margin-top:-8px;">* 完成度 =（已验证 + 待人工确认）/ 该模块需求总数。TTS 44% 是因为 Azure / OpenAI / ElevenLabs / 本地 TTS 四个扩展 Provider 仅预留了接口，未实现。</p>
+
+  <!-- ===== 里程碑 ===== -->
+  <h1 class="heading">三、里程碑</h1>
+  <ol class="timeline">
+    <li class="done">
+      <strong>M0 — 环境与依赖就绪（已完成）</strong>
+      <p>Node 24 / Python 3.12 venv / RTX 3060 CUDA / npm·pip·HF 三层国内镜像全部打通。</p>
+    </li>
+    <li class="done">
+      <strong>M1 — v1.0 MVP（已完成）</strong>
+      <p>角色渲染 + 全部交互链路 + 语音对话。核心链路端到端验证通过（STT 实测识别、TTS 实测合成、渲染 alpha 验证）。</p>
+    </li>
+    <li class="done">
+      <strong>M1.05 — v1.0.1 UI 打磨包（已完成 · 当前基线）</strong>
+      <p>人物站位对齐功能栏、打招呼手势重做、工具栏 hover 死区修复、首启/唤醒纹理时序保护，5 项全部像素级 / CDP 自动化实测验证。</p>
+    </li>
+    <li>
+      <strong>M1.1 — v1.1 打磨包（规划中 · 建议 1–2 天）</strong>
+      <p>填 Key 后全链路复测、FPS 埋点、窗口位置持久化、对话历史持久化、electron-builder 打包。<span class="desc">依赖：用户完成 DeepSeek API Key 配置。</span></p>
+    </li>
+    <li>
+      <strong>M1.5 — v1.5 体验增强（规划中 · 建议 1–2 周）</strong>
+      <p>长期记忆、流式 STT、LLM 流式输出、TTS 扩展 Provider、情绪联动音色、说话身体语言、动作库扩充。</p>
+    </li>
+    <li>
+      <strong>M2.0 — v2.0 智能进化（远期）</strong>
+      <p>多角色系统、日程提醒、屏幕感知、VRMA 动画导入、多语言、自动更新、移动端伴侣。</p>
+    </li>
+  </ol>
+
+  <!-- ===== Phase 1-16 已完成清单 ===== -->
+  <h1 class="heading">四、已完成开发内容（Phase 1–17）</h1>
+  <ul class="task-list">
+    <li><span class="status-pill success">Phase 1</span> <strong>项目骨架</strong> — 模块化目录 / package.json（electron 34.5.8 + three 0.174 + three-vrm 3.5.5）/ npmrc 镜像 / config.json 全量配置 / system_prompt.txt 人格文件 / venv + requirements 依赖锁定</li>
+    <li><span class="status-pill success">Phase 2</span> <strong>Electron 基座</strong> — 窗口生命周期 / 托盘 / 快捷键 / IPC / 麦克风权限 / preload 安全桥 15 方法 / app:// 自定义协议（fetch + importmap + VRM 二进制 + no-store）</li>
+    <li><span class="status-pill success">Phase 3</span> <strong>透明桌面窗口</strong> — 全屏 transparent + frame:false / screen-saver 置顶 / 智能点击穿透（260px 交互半径）/ 33ms 全局鼠标轮询 / 独立爱心挂件小窗</li>
+    <li><span class="status-pill success">Phase 4</span> <strong>渲染与交互</strong> — SceneManager 四灯光组 / VRMFactory（VRM0 朝向归一 + 深度销毁）/ AvatarController 20 骨骼 / CostumeManager 双模式换装 / 粒子系统 60 池化 / 眼神追踪（头 65% 颈 35% + 限位）/ 拖拽·点击·长按三分状态机 + raycast 摸头</li>
+    <li><span class="status-pill success">Phase 5</span> <strong>动画与情绪</strong> — 程序化动画状态机（13 动作 + idle 基础层 + 指数阻尼混合）/ 7 类情绪映射 18 BlendShape / 自动眨眼 / SpringBone 发丝物理</li>
+    <li><span class="status-pill success">Phase 6–7</span> <strong>后端与 LLM</strong> — WebSocket 8765 消息路由 / config 深合并 / DeepSeek（JSON mode + 401·402·429 中文错误）/ Ollama provider / 12 轮上下文 / 意图校验器 + 别名归一 + 服装关键词猜测</li>
+    <li><span class="status-pill success">Phase 8</span> <strong>语音识别</strong> — Faster-Whisper CUDA float16（实测就绪）/ CUDA DLL 三重加载保障 / hf-mirror.com 镜像 / 后台线程加载 + 30s 就绪等待 / <strong>端到端实测通过</strong>："你好，今天天气真不错呀。" 正确识别</li>
+    <li><span class="status-pill success">Phase 9</span> <strong>语音合成</strong> — TTS Provider 抽象架构 / Edge-TTS 5 音色 + 失效回退 / 句子切分流式合成 / <strong>实测通过</strong>：28KB mp3 / 4.0s</li>
+    <li><span class="status-pill success">Phase 10</span> <strong>口型同步</strong> — Web Audio FFT 2048 / 5 元音频段映射（ou/oh/aa/ih/ee）/ 自适应峰值归一化 / 非对称张闭速度 / 逐句播放队列</li>
+    <li><span class="status-pill success">Phase 11</span> <strong>意图动作系统</strong> — ActionDispatcher 10 动作分发 / 摸头随机 6 台词 / 换装中点换模 / leave/return 通信回路修复（app:awaken 单向通知消除死循环）</li>
+    <li><span class="status-pill success">Phase 12</span> <strong>换装</strong> — 5 槽位架构 / 旋转 + 星光演出 / 语音·工具栏·托盘三入口</li>
+    <li><span class="status-pill success">Phase 13–14</span> <strong>托盘 / 快捷键 / UI</strong> — heart.html 呼吸爱心 / Ctrl+Alt+G 双向热键 / 工具栏 5 键接近淡入 / 聊天面板 / 设置面板 6 组配置 / Toast 三级样式 / 录音指示器</li>
+    <li><span class="status-pill success">Phase 15</span> <strong>启动链路</strong> — 一键 BAT（依赖检查 → 后端启动 → TCP 就绪探测 40×1s → Electron → 退出清理）/ check-deps postinstall / 官方示例 VRM 模型下载 / 托盘图标</li>
+    <li><span class="status-pill success">Phase 16</span> <strong>集成测试与修复</strong> — 全链路联测，定位并修复 7 个真实缺陷（详见 4.1）</li>
+    <li><span class="status-pill success">Phase 17</span> <strong>UI 打磨与加载时序修复（v1.0.1）</strong> — 人物站位动态对齐工具栏（Box3 脚底补偿，像素差 ~1px）/ 打招呼手势重做（举至头侧、掌心朝观众）/ 工具栏 hover 死区修复 + 260ms 防抖 / 首启延迟显示（show:false + window:show IPC + 15s 兑底）/ 唤醒纹理保护（canvas 隐藏 700ms + Chromium 三开关）</li>
+  </ul>
+
+  <!-- ===== 缺陷修复记录 ===== -->
+  <h2 class="heading">4.1 v1.0 集成阶段修复的 7 个真实缺陷</h2>
+  <ul class="task-list">
+    <li><span class="status-pill success">FIX-1</span> <strong>相对路径双重解析</strong> — renderer 页面基底导致 <code>renderer/renderer/app.js</code> 404，模块从未执行 → 根相对路径 + importmap 修复</li>
+    <li><span class="status-pill success">FIX-2</span> <strong>Chromium 磁盘缓存旧模块</strong> — <code>no-cache</code> 无验证器失效 → <code>no-store</code></li>
+    <li><span class="status-pill success">FIX-3</span> <strong>IPC 死循环</strong> — setHeartMode↔run('return') 互相触发，return 动画无限重播 → 单向 <code>app:awaken</code> 通知</li>
+    <li><span class="status-pill success">FIX-4</span> <strong>骨骼旋转永不生效</strong> — 主循环漏调 <code>vrm.update()</code>，normalized 骨骼旋转无法同步到蒙皮骨骼（手臂恒 T-pose）→ 补同步调用</li>
+    <li><span class="status-pill success">FIX-5</span> <strong>HuggingFace 被墙</strong> — WinError 10060 模型下载失败 → HF_ENDPOINT=hf-mirror.com</li>
+    <li><span class="status-pill success">FIX-6</span> <strong>PyAV API 不兼容</strong> — av 19 移除 <code>metadata_errors</code> 参数 → 锁定 av==15.1.0（签名实测）</li>
+    <li><span class="status-pill success">FIX-7</span> <strong>CUDA DLL 跨线程丢失</strong> — cublas64_12.dll 识别期找不到 → PATH + add_dll_directory + ctypes WinDLL 三重保障</li>
+  </ul>
+
+  <h2 class="heading">4.2 v1.0.1 UI 打磨阶段修复的 5 项体验问题</h2>
+  <ul class="task-list">
+    <li><span class="status-pill success">FIX-8</span> <strong>人物位置与功能栏不对齐</strong> — 硬编码 basePos (2.2, -0.15) 与工具栏位置无关 → 动态计算（对齐工具栏中心 + Box3 实测模型脚底补偿，任意分辨率/DPI/模型自适应），像素验证偏差 ~1px</li>
+    <li><span class="status-pill success">FIX-9</span> <strong>打招呼手势不像参考图</strong> — 手臂举幅不足/掌心朝向偏 → 按用户示意图重定义（举至头侧同高、掌心朝观众、轻摆），基于 VRM 骨骼规范的几何脚本精确推算参数，两轮收敛</li>
+    <li><span class="status-pill success">FIX-10</span> <strong>工具栏 hover 死区</strong> — 鼠标从人物移向工具栏途中脱离“接近”判定，工具栏消失且窗口穿透点不到按钮 → _uiHover 区域判定（工具栏± 20px，隐藏态兼作唤出）+ 淡出防抖 260ms + 聊天/设置/换装面板同步保护</li>
+    <li><span class="status-pill success">FIX-11</span> <strong>启动时半成品人物闪现</strong> — BrowserWindow 默认创建即显示 + setModel 瞬时全显，纹理未上 GPU 的白/半透明帧直接亮出 → show:false + 模型就绪后 window:show IPC 揭示 + 15s 超时兑底 + 移除瞬时 setOpacity(1)</li>
+    <li><span class="status-pill success">FIX-12</span> <strong>唤醒/休息后纹理虚影</strong> — 窗口隐藏期间 Chromium 回收 GPU 纹理，唤醒后 ~640ms 无纹理虚影，且 opacity 无法遮盖 MToon outline/shade pass → canvas 元素级 visibility:hidden 700ms（合成跳过但 WebGL 绘制照常重传纹理）+ disable-renderer-backgrounding 等三开关从根源阻止隐藏窗口资源降级</li>
+  </ul>
+
+  <!-- ===== 待人工确认 ===== -->
+  <h1 class="heading">五、已完成 · 待人工确认（9 项）</h1>
+  <ul class="task-list">
+    <li><span class="status-pill warning">待确认</span> <strong>真实麦克风 VAD 断句体验</strong> — 插麦克风说几句话，观察 800ms 静默自动提交与预滚缓冲</li>
+    <li><span class="status-pill warning">待确认</span> <strong>口型同步视觉效果</strong> — 播放长句时观察嘴型开合与语音节奏是否自然</li>
+    <li><span class="status-pill warning">待确认</span> <strong>眨眼 / 表情切换</strong> — 随机眨眼频率与情绪切换过渡是否流畅</li>
+    <li><span class="status-pill warning">待确认</span> <strong>摸头互动体验</strong> — 点击 / 长按头部 → 害羞 + 爱心粒子 + 随机语音三件套</li>
+    <li><span class="status-pill warning">待确认</span> <strong>头发 / 裙摆物理</strong> — SpringBone 摆动（发丝类模型效果更明显）</li>
+    <li><span class="status-pill warning">待确认</span> <strong>开机自启动</strong> — 设置勾选后重启系统验证</li>
+    <li><span class="status-pill warning">待确认</span> <strong>语音召回</strong> — 爱心挂件态下说"回来 / 出来 / 我想你了"</li>
+    <li><span class="status-pill warning">待确认</span> <strong>渲染 FPS</strong> — 目标 60，需 DevTools Performance 实测确认</li>
+    <li><span class="status-pill warning">待确认</span> <strong>DeepSeek 真实对话质量</strong> — 填 Key 后观察回复自然度 / 意图命中率 / 情绪合理性</li>
+  </ul>
+
+  <!-- ===== 用户配合项 ===== -->
+  <h1 class="heading">六、需要你完成的 2 件事</h1>
+  <aside class="callout" data-variant="warning">
+    <p><strong>① 填写 DeepSeek API Key（唯一阻塞项）</strong><br>
+    启动程序 → 鼠标靠近角色 → 底部工具栏 ⚙️ 设置 → AI 大模型 → 粘贴 Key → 保存。在 platform.deepseek.com 免费注册获取。未填写时语音/文字对话会返回明确中文引导提示，其余功能（渲染 / STT / 换装 / 离开返回）不受影响。</p>
+  </aside>
+  <aside class="callout">
+    <p><strong>②（可选）放置专属 VRM 服装模型</strong><br>
+    从 VRoid Hub 下载喜欢的角色，放入 <code>assets/costumes/</code> 并按 config.json 命名（costume_casual.vrm / costume_school.vrm 等 5 套）。未放置时自动使用材质配色变体，功能完整但视觉为配色切换。</p>
+  </aside>
+
+  <!-- ===== 待开发 Backlog ===== -->
+  <h1 class="heading">七、待开发列表（27 项 Backlog）</h1>
+
+  <h3 class="heading">P0 — v1.1 打磨包（建议 1–2 天）</h3>
+  <ul class="list pending-list">
+    <li><strong>DeepSeek Key 填写后全链路复测</strong> — 语音对话 → 意图动作 → 换装 / 离开 / 返回，逐项过 22 条验收标准</li>
+    <li><strong>FPS 性能埋点</strong> — DevTools rAF 统计或简易 FPS 角标</li>
+    <li><strong>窗口位置持久化</strong> — 记住上次拖放位置（user.json 增加 window.x/y）</li>
+    <li><strong>快捷键自定义设置入口</strong> — 设置面板暴露 hotkey 字段</li>
+    <li><strong>electron-builder 打包</strong> — NSIS 安装包；需评估 Python 后端便携化（embedded python / PyInstaller）</li>
+    <li><strong>BAT 退出清理强化</strong> — 窗口标题匹配改为 PID 文件方案</li>
+    <li><strong>对话历史持久化</strong> — JSONL 追加写入 config/history.jsonl，重启保留</li>
+  </ul>
+
+  <h3 class="heading">P1 — v1.5 体验增强（建议 1–2 周）</h3>
+  <ul class="list pending-list">
+    <li><strong>长期记忆模块</strong> — 重要事实抽取 + 用户画像 + 相似度召回注入 prompt</li>
+    <li><strong>流式 STT</strong> — faster-whisper 实时 partial → 打字机显示</li>
+    <li><strong>LLM 流式输出</strong> — SSE chunk → 首句提前合成播放，压缩首音延迟</li>
+    <li><strong>Azure TTS Provider</strong> — 企业级音色（接口已预留）</li>
+    <li><strong>OpenAI TTS Provider</strong>（接口已预留）</li>
+    <li><strong>ElevenLabs Provider</strong>（接口已预留）</li>
+    <li><strong>本地 TTS Provider</strong> — GPT-SoVITS，实现全离线语音</li>
+    <li><strong>情绪联动音色与语速</strong> — happy → +rate 活泼 / caring → −rate 温柔</li>
+    <li><strong>说话时身体语言</strong> — TTS 播放期间叠加小幅手势层</li>
+    <li><strong>动作库扩充</strong> — 飞吻 / 伸懒腰 / 组合招乎 / 点头摇头</li>
+    <li><strong>快捷键自定义 + 手势互动</strong> — 双击身体转圈等</li>
+    <li><strong>System Prompt 可视化编辑</strong> — 设置面板内编辑 + 重置</li>
+    <li><strong>5 套专属 VRM 素材</strong> — 等待用户提供或外包建模</li>
+  </ul>
+
+  <h3 class="heading">P2 — v2.0 智能进化（远期）</h3>
+  <ul class="list pending-list">
+    <li><strong>多角色系统</strong> — 多 VRM 人格档案切换，各自独立记忆</li>
+    <li><strong>日程提醒能力</strong> — 报时 / 喝水提醒 / 日程播报（结合 scheduler）</li>
+    <li><strong>屏幕感知</strong> — 截屏理解上下文（"你看我桌面这个报错"）</li>
+    <li><strong>VRMA 标准动画导入</strong> — 混合动捕动画与程序化动画</li>
+    <li><strong>多语言</strong> — 英文 / 日文 prompt 与 UI</li>
+    <li><strong>自动更新</strong> — electron-updater</li>
+    <li><strong>移动端伴侣 App</strong> — 同一人格云端同步</li>
+  </ul>
+
+  <!-- ===== 验证记录 ===== -->
+  <h1 class="heading">八、验证记录（关键测试日志）</h1>
+  <ol class="timeline">
+    <li><strong>10-01 20:15 · 环境探测</strong><p>Node 24 / Python 3.12.14 / RTX 3060 Laptop 6GB（非需求文档的 4090，模型配置已相应调整）</p></li>
+    <li><strong>10-01 21:57 · 首次渲染截图</strong><p>角色未出现 → 定位相对路径 404（app:// 基底问题）</p></li>
+    <li><strong>10-01 22:10 · alpha 通道审计</strong><p>揭示"截图角色"实为透明窗口下的桌面壁纸泄漏，推翻此前误判，确立 alpha=255 真实渲染判定标准</p></li>
+    <li><strong>10-01 23:05 · 修复后渲染</strong><p>20 骨骼 + 18 表情确认：<code>model ready: bones=20 expressions=18</code></p></li>
+    <li><strong>10-01 23:12 · vrm.update 修复</strong><p>intro return 完整播完，手臂自然下垂（3s / 13s 双截图对比）</p></li>
+    <li><strong>10-01 23:28 · 后端启动</strong><p>WS 8765 监听，DeepSeek / edge provider 装配成功</p></li>
+    <li><strong>10-01 23:30 · TTS 冒烟</strong><p><code>TTS ok: 1 chunks, 28032 bytes in 4.0s</code> — 合成链路打通</p></li>
+    <li><strong>10-01 23:30 · LLM 错误路径</strong><p>无 Key → 明确中文引导提示（不崩溃）</p></li>
+    <li><strong>10-01 23:44 · Whisper CUDA</strong><p>DLL 注册 + hf-mirror 下载：<code>whisper ready on cuda (float16)</code>（310.8s 含模型下载）</p></li>
+    <li><strong>10-01 23:52 · STT 首测失败</strong><p><code>metadata_errors</code> 异常 → 定位 av 19.0.0 API 变更</p></li>
+    <li><strong>10-02 00:10 · av 降级</strong><p>av==15.1.0 兼容性确认（inspect 签名实测）</p></li>
+    <li><strong>10-02 00:17 · STT 二测失败</strong><p>cublas64_12.dll 跨线程丢失 → 三重加载加固</p></li>
+    <li><strong>10-02 00:18 · STT 端到端 ✅</strong><p>"你好,今天天气真不错呀。" 正确识别（CUDA float16，11.9s 含模型预热）</p></li>
+    <li><strong>10-02 00:20 · 收尾</strong><p>Electron↔Backend 联通验证，全部测试进程清理</p></li>
+    <li><strong>10-02 02:00 · 站位像素验证 ✅</strong><p>人物中心 1684px vs 工具栏中心 1685px（差 1px）；脚底在工具栏顶上方 23px；确认窗口实际 DIP 尺寸 1536×816（125% DPI）</p></li>
+    <li><strong>10-02 02:20 · 手势验证 ✅</strong><p>400ms 间隔密拍动画序列 + 几何计算脚本双验证：手端过头骨 5cm ≈ 头侧同高，掌心朝观众</p></li>
+    <li><strong>10-02 02:30 · 工具栏 CDP 交互测试 ✅</strong><p>6 步真实鼠标序列全部 PASS：hover 显示 / 保持 / 人物附近显示 / 防抖期内不闪 / 远离后正常隐藏</p></li>
+    <li><strong>10-02 02:40 · 首启延迟显示 ✅</strong><p>窗口首次可见从启动 ~1s 推迟到 3.5s（模型就绪后）；CDP 截图确认首帧纹理完整</p></li>
+    <li><strong>10-02 03:00 · 唤醒烂帧复现 ❗</strong><p>leave→summon 流程脚本化重放：唤醒后 0–480ms 半透明虚影/无五官，640ms 起纹理才恢复 → 定位为隐藏窗口期间 GPU 纹理被回收</p></li>
+    <li><strong>10-02 03:25 · 唤醒修复验证 ✅</strong><p>canvas 隐藏 700ms 方案重放同一流程：等待期完全空白，首次可见帧纹理完全正常，全程无虚影</p></li>
+  </ol>
+
+  <!-- ===== 风险 ===== -->
+  <h1 class="heading">九、风险与对策</h1>
+  <div class="table-wrap">
+    <table class="table" data-caption="风险与对策">
+      <colgroup><col style="width:30%"><col style="width:12%"><col style="width:58%"></colgroup>
+      <thead><tr><th>风险</th><th>等级</th><th>对策</th></tr></thead>
+      <tbody>
+        <tr><td>DeepSeek Key 未配置</td><td>阻塞</td><td>UI / 文档双重引导；TTS / STT / 渲染不受影响</td></tr>
+        <tr><td>真机麦克风体验未实测</td><td>中</td><td>v1.1 首个任务；已留状态指示与错误提示</td></tr>
+        <tr><td>示例模型非美少女形象</td><td>低</td><td>架构支持任意 VRM 替换；建议 VRoid Hub 选型</td></tr>
+        <tr><td>Edge-TTS 非官方接口</td><td>中</td><td>Provider 架构可快速切换 Azure 官方</td></tr>
+        <tr><td>6GB 显存限制本地 LLM</td><td>低</td><td>在线 DeepSeek 已默认；Ollama 建议 qwen3:4b 级别</td></tr>
+        <tr><td>打包后 Python 便携化</td><td>中</td><td>v1.1 评估 embedded Python / PyInstaller 方案</td></tr>
+        <tr><td>隐藏窗口 GPU 纹理回收（机型/驱动差异可能影响恢复时长）</td><td>低</td><td>已加 Chromium 三开关 + canvas 隐藏 700ms 双保险；个别机型仍有虚影可调大 ActionDispatcher 中的 700ms 常量</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 尾页 ===== -->
+  <section class="title end_page">
+    <h1>下一步：填 Key → 全链路复测 → v1.1 打磨</h1>
+    <p>配套文档：docs/PRD.md · docs/开发计划.md · docs/产品需求文档.html<br>启动方式：双击 scripts/启动AI女友.bat</p>
+  </section>
+
+</body>
+</html>

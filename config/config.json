@@ -1,0 +1,64 @@
+{
+  "app": {
+    "persona_name": "小满",
+    "user_name": "主人",
+    "prompt_file": "prompts/system_prompt.txt"
+  },
+  "llm": {
+    "provider": "deepseek",
+    "deepseek": {
+      "api_key": "",
+      "base_url": "https://api.deepseek.com",
+      "model": "deepseek-chat",
+      "temperature": 0.8,
+      "max_tokens": 512,
+      "timeout_seconds": 60
+    },
+    "ollama": {
+      "base_url": "http://127.0.0.1:11434",
+      "model": "qwen3:4b",
+      "temperature": 0.8,
+      "num_ctx": 8192,
+      "timeout_seconds": 120
+    },
+    "max_history": 12
+  },
+  "stt": {
+    "model": "small",
+    "language": "zh",
+    "device": "auto",
+    "compute_type": "auto",
+    "vad_enabled": true,
+    "silence_ms": 800,
+    "min_speech_ms": 250
+  },
+  "tts": {
+    "provider": "edge",
+    "edge": {
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+0%",
+      "volume": "+0%"
+    },
+    "volume": 0.9
+  },
+  "avatar": {
+    "default_costume": "casual",
+    "fallback_model": "assets/models/default.vrm",
+    "costumes": {
+      "casual": "assets/costumes/costume_casual.vrm",
+      "school": "assets/costumes/costume_school.vrm",
+      "stylish": "assets/costumes/costume_stylish.vrm",
+      "gothic": "assets/costumes/costume_gothic.vrm",
+      "seed": "assets/costumes/costume_seed.vrm"
+    }
+  },
+  "window": {
+    "always_on_top": true,
+    "skip_taskbar": true,
+    "launch_at_startup": false
+  },
+  "hotkey": "Control+Alt+G",
+  "server": {
+    "port": 8765
+  }
+}

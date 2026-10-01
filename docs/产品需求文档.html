@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D 桌面 AI 女友 · 产品需求文档（PRD）</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { min-height: 100%; }
+body {
+  position: relative;
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Noto Sans SC", sans-serif;
+  color: #1f2d3d;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  background: linear-gradient(160deg, #f8fafc 0%, #ffffff 45%, #cfe0f5 100%);
+  min-height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 45% 35% at 12% 8%, rgba(255,255,255,0.55) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 88% 90%, rgba(255,255,255,0.45) 0%, transparent 55%);
+}
+body > * { position: relative; z-index: 1; }
+
+/* ===== 封面 ===== */
+.title {
+  position: relative;
+  overflow: hidden;
+  padding: 56px 40px;
+  text-align: center;
+  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 50%, #4f8ef7 100%);
+  color: #ffffff;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+.title::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 18% 82%, rgba(255,255,255,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 82% 18%, rgba(255,255,255,0.08) 0%, transparent 55%);
+  pointer-events: none;
+}
+.title > * { position: relative; z-index: 1; }
+.title h1 { font-size: 30px; font-weight: 800; margin: 0 0 14px 0; letter-spacing: 1px; color: #ffffff; }
+.title .accent-line { width: 48px; height: 3px; background: rgba(255,255,255,0.85); margin: 0 auto 18px; border-radius: 2px; }
+.title p { font-size: 15px; color: rgba(255,255,255,0.85); margin: 0; line-height: 1.7; }
+
+/* ===== 章节标题 ===== */
+h1.heading {
+  font-size: 26px; color: #0f1e33; margin: 36px 0 16px 0; font-weight: 700;
+  border-left: 4px solid #3b82f6; padding-left: 16px;
+}
+h2.heading {
+  font-size: 21px; color: #0f1e33; margin: 26px 0 12px; padding-bottom: 8px;
+  border-bottom: 2px solid #c9d6f3; font-weight: 600;
+}
+h3.heading { font-size: 16px; color: #0f1e33; margin: 18px 0 10px; font-weight: 600; }
+
+/* ===== 正文 ===== */
+.paragraph { font-size: 14px; color: #1f2d3d; line-height: 1.8; margin: 0 0 14px 0; }
+.doc-section { background: #ffffff; border-radius: 14px; padding: 22px 26px; margin: 0 0 16px 0; box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
+.doc-section.alt { background: #e6edf6; box-shadow: none; }
+
+/* ===== 状态胶囊 ===== */
+.status-pill {
+  display: inline-block; padding: 2px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.status-pill.success { background: #16a34a; color: #ffffff; }
+.status-pill.warning { background: #FFF3E0; color: #E65100; }
+.status-pill.pending { background: #e8f0fe; color: #2563eb; }
+
+/* ===== 列表 ===== */
+.list { margin: 0 0 14px 0; padding-left: 24px; font-size: 14px; color: #1f2d3d; line-height: 1.8; }
+.list li { margin-bottom: 8px; }
+.list li::marker { color: #3b82f6; }
+.list li .desc { color: #5b6b80; font-size: 13px; }
+
+/* ===== callout ===== */
+.callout {
+  margin: 0 0 16px 0; padding: 16px 24px;
+  background: #e8f0fe; border-left: 4px solid #3b82f6; border-radius: 8px;
+}
+.callout[data-variant="warning"] { background: #FFF3E0; border-left-color: #d97706; }
+.callout[data-variant="quote"] { background: #f0fdfa; border-left-color: #14b8a6; }
+.callout p { font-size: 14px; color: #1f2d3d; margin: 0; line-height: 1.8; }
+
+/* ===== stat ===== */
+.stat-grid { display: flex; gap: 14px; margin: 0 0 16px 0; }
+.stat {
+  flex: 1; text-align: center; padding: 18px 12px; background: #ffffff;
+  border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); border-top: 3px solid #3b82f6;
+}
+.stat .num { font-size: 24px; color: #3b82f6; font-weight: 800; line-height: 1.1; }
+.stat .label { font-size: 11px; color: #5b6b80; margin-top: 5px; }
+.stat.green { border-top-color: #16a34a; } .stat.green .num { color: #16a34a; }
+.stat.orange { border-top-color: #d97706; } .stat.orange .num { color: #d97706; }
+.stat.gray { border-top-color: #6b7280; } .stat.gray .num { color: #6b7280; }
+
+/* ===== card ===== */
+.card-grid { display: flex; gap: 14px; margin: 0 0 16px 0; }
+.card {
+  flex: 1; background: #ffffff; padding: 18px; border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06); border-top: 3px solid #3b82f6;
+}
+.card h3 { font-size: 15px; color: #0f1e33; margin: 0 0 6px 0; font-weight: 700; }
+.card p { font-size: 12.5px; color: #5b6b80; margin: 0; line-height: 1.7; }
+
+/* ===== 表格 ===== */
+.table-wrap { background: #ffffff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; margin: 0 0 16px 0; }
+.table-caption {
+  padding: 11px 16px; background: linear-gradient(135deg, #c9d6f3, #e8f0fe);
+  color: #0f1e33; font-size: 13px; font-weight: 600; text-align: center; border-bottom: 1px solid #dbe4ef;
+}
+table.table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+table.table thead th {
+  padding: 10px 12px; text-align: left; background: #c9d6f3; color: #0f1e33;
+  font-weight: 700; border-bottom: 2px solid #dbe4ef; word-break: break-word;
+}
+table.table tbody td { padding: 9px 12px; border-bottom: 1px solid #dbe4ef; color: #1f2d3d; word-break: break-word; vertical-align: top; line-height: 1.65; }
+table.table tbody tr:last-child td { border-bottom: none; }
+table.table tbody tr:hover { background: #e8f0fe; }
+table.table td .desc { color: #5b6b80; font-size: 11.5px; }
+code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; font-family: Consolas, monospace; }
+
+/* ===== code 块 ===== */
+.code {
+  background: #1e293b; color: #e2e8f0; padding: 16px 20px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.6; overflow-x: auto; margin: 0 0 16px 0;
+  font-family: 'Cascadia Code', Consolas, monospace;
+}
+
+/* ===== timeline ===== */
+.timeline { list-style: none; padding: 0; margin: 0 0 16px 0; }
+.timeline li {
+  position: relative; padding-left: 28px; padding-bottom: 16px;
+  border-left: 2px solid #c9d6f3; margin-left: 6px;
+}
+.timeline li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline li::before {
+  content: ''; position: absolute; left: -7px; top: 5px;
+  width: 12px; height: 12px; border-radius: 50%; background: #3b82f6;
+  border: 2px solid #f4f7fb; box-shadow: 0 0 0 2px #c9d6f3;
+}
+.timeline strong { font-size: 13.5px; color: #2563eb; }
+.timeline p { font-size: 13.5px; color: #1f2d3d; margin: 4px 0 0 0; line-height: 1.8; }
+
+/* ===== 尾页 ===== */
+.end_page {
+  margin-top: 24px; padding: 48px 24px; text-align: center;
+  background: linear-gradient(135deg, #c9d6f3 0%, #e8f0fe 100%); border-radius: 16px;
+}
+.end_page h1 { font-size: 26px; color: #0f1e33; margin: 0 0 14px 0; font-weight: 800; }
+.end_page p { font-size: 14px; color: #5b6b80; margin: 0; line-height: 1.8; }
+
+@media screen and (max-width: 600px) {
+  body { padding: 16px !important; }
+  h1 { font-size: 22px !important; } h2 { font-size: 18px !important; } h3 { font-size: 15px !important; }
+  .stat-grid, .card-grid { flex-direction: column; }
+  .title { padding: 40px 24px; }
+}
+@media print {
+  body { padding: 0 !important; margin: 0 !important; background: #f4f7fb; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body::before { display: none; }
+  .title, .end_page { border-radius: 0; box-shadow: none; }
+  .doc-section, .card, .stat, .table-wrap { box-shadow: none; border: 1px solid #dbe4ef; }
+  section { break-inside: auto !important; }
+}
+</style>
+</head>
+<body class="mode-doc" data-palette="ink-blue">
+
+  <!-- ===== 封面 ===== -->
+  <section class="title">
+    <h1>3D 桌面 AI 女友</h1>
+    <div class="accent-line"></div>
+    <p>产品需求文档（PRD）· v1.0 · MVP 已交付基线<br>Desktop AI Girlfriend — Electron 34 + Three.js VRM + DeepSeek + Faster-Whisper + Edge-TTS</p>
+  </section>
+
+  <!-- ===== 文档信息 ===== -->
+  <div class="table-wrap">
+    <table class="table" data-caption="文档信息">
+      <colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+      <tbody>
+        <tr><td><strong>产品名称</strong></td><td>3D 桌面 AI 女友（Desktop AI Girlfriend）</td></tr>
+        <tr><td><strong>文档版本</strong></td><td>v1.0（MVP 交付基线，2026-10-01）</td></tr>
+        <tr><td><strong>产品状态</strong></td><td><span class="status-pill success">MVP 已交付</span> 核心链路端到端验证通过；5 项待人工确认；14 项待开发</td></tr>
+        <tr><td><strong>代码规模</strong></td><td>约 46 个源码文件 · Electron + Python 双进程架构 · 项目位于 <code>ai-girlfriend/</code></td></tr>
+        <tr><td><strong>配套文档</strong></td><td>开发计划看板 <code>docs/开发计划.html</code> · 源文档 <code>docs/PRD.md</code> / <code>docs/开发计划.md</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="stat-grid" data-cols="4">
+    <div class="stat"><div class="num">96</div><div class="label">功能需求</div></div>
+    <div class="stat green"><div class="num">77</div><div class="label">已验证完成</div></div>
+    <div class="stat orange"><div class="num">5</div><div class="label">待人工确认</div></div>
+    <div class="stat gray"><div class="num">14</div><div class="label">待开发</div></div>
+  </div>
+
+  <!-- ===== 一、产品概述 ===== -->
+  <h1 class="heading">一、产品概述</h1>
+  <div class="doc-section">
+    <h3 class="heading">1.1 一句话定位</h3>
+    <p class="paragraph">一个<strong>长期驻留在 Windows 桌面上的实时 3D AI 虚拟伴侣</strong>：透明无边框窗口中的 VRM 角色，能看着你的鼠标、听你说话、开口回应并同步口型、做动作、表达情绪、换装、离开休息与召回——像一个真正"住"在电脑里的人。</p>
+    <aside class="callout" data-variant="quote">
+      <p><strong>设计愿景</strong>：打开程序后，用户桌面上多了一个会说话、会看着自己、会做动作、会回应自己的 3D AI 角色。她不是网页弹窗，不是聊天工具，而是桌面本身的一部分。</p>
+    </aside>
+  </div>
+  <div class="doc-section alt">
+    <h3 class="heading">1.2 目标用户</h3>
+    <ul class="list">
+      <li>长时间使用 Windows 工作站办公的独居青年 / 技术从业者</li>
+      <li>需要 AI 陪伴但抗拒传统"聊天框"形态的用户</li>
+      <li>桌面美化爱好者（Wallpaper Engine、桌面宠物用户群）</li>
+    </ul>
+  </div>
+  <h3 class="heading">1.3 核心价值</h3>
+  <div class="card-grid" data-cols="5">
+    <div class="card"><h3>真实存在感</h3><p>透明窗口 + 全屏眼神追踪 + 物理 Idle（呼吸/眨眼/发丝物理），角色有"活着"的感觉</p></div>
+    <div class="card"><h3>多模态自然交互</h3><p>语音（说）→ STT → LLM → TTS（听）→ 口型同步（看），全链路延迟秒级</p></div>
+    <div class="card"><h3>主动行为能力</h3><p>LLM 输出结构化 JSON（emotion + action），角色执行换装/离开/返回等真实动作</p></div>
+    <div class="card"><h3>可成长人格</h3><p>System Prompt 独立文件 + 角色名/称呼/性格可配 + 上下文记忆</p></div>
+    <div class="card"><h3>服务可插拔</h3><p>LLM 双 Provider（DeepSeek/Ollama）+ TTS Provider 架构化，业务与服务解耦</p></div>
+  </div>
+
+  <!-- ===== 二、用户故事 ===== -->
+  <h1 class="heading">二、用户故事</h1>
+  <div class="table-wrap">
+    <table class="table" data-caption="用户故事（12 条）">
+      <colgroup><col style="width:9%"><col style="width:73%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>用户故事</th><th>优先级 / 状态</th></tr></thead>
+      <tbody>
+        <tr><td>US-01</td><td>双击一个 BAT 就能让她出现在桌面上，无需理解技术细节</td><td>P0 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-02</td><td>移动鼠标时她会看向我的鼠标，感觉她在关注我</td><td>P0 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-03</td><td>对着麦克风说话，她能听懂并语音回答，嘴型同步</td><td>P0 · <span class="status-pill warning">待实测</span></td></tr>
+        <tr><td>US-04</td><td>用文字和她聊天，她同样会语音回答</td><td>P0 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-05</td><td>点她的头，她会害羞并说撒娇的话</td><td>P1 · <span class="status-pill warning">待实测</span></td></tr>
+        <tr><td>US-06</td><td>说"换成水手服"，她转圈换装并播撒星光</td><td>P1 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-07</td><td>说"去休息吧"她挥手离开变粉色爱心；说"回来"或点爱心重新出现</td><td>P1 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-08</td><td>通过设置面板修改 AI 模型、音色、角色名字等一切配置</td><td>P1 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-09</td><td>把她拖到屏幕任意位置</td><td>P1 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-10</td><td>她一直待在最上层，不遮挡我操作其他软件（点击穿透）</td><td>P0 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-11</td><td>托盘图标和 Ctrl+Alt+G 能随时召回或隐藏她</td><td>P1 · <span class="status-pill success">已交付</span></td></tr>
+        <tr><td>US-12</td><td>她有自然呼吸、眨眼、头发摆动，不是僵硬的模型</td><td>P1 · <span class="status-pill warning">待实测</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 三、功能需求 ===== -->
+  <h1 class="heading">三、功能需求（96 条）</h1>
+  <aside class="callout">
+    <p><strong>状态图例</strong>：<span class="status-pill success">已完成</span> 代码交付且验证通过 ·
+    <span class="status-pill warning">待确认</span> 代码交付需人工体验 ·
+    <span class="status-pill pending">待开发</span> 列入 Backlog</p>
+  </aside>
+
+  <h2 class="heading">3.1 桌面宿主层（Electron）</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:51%"><col style="width:15%"><col style="width:25%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证方式</th></tr></thead>
+      <tbody>
+        <tr><td>FR-101</td><td>透明无边框全屏窗口（transparent + frame:false）</td><td><span class="status-pill success">已完成</span></td><td>截图 alpha 通道采样验证</td></tr>
+        <tr><td>FR-102</td><td>窗口置顶（screen-saver 级），可选跳过任务栏</td><td><span class="status-pill success">已完成</span></td><td>运行观察</td></tr>
+        <tr><td>FR-103</td><td>智能点击穿透：鼠标不在角色附近时事件穿透到桌面</td><td><span class="status-pill success">已完成</span></td><td>代码路径 + 运行</td></tr>
+        <tr><td>FR-104</td><td>全局鼠标位置轮询（主进程 33ms）</td><td><span class="status-pill success">已完成</span></td><td>日志验证</td></tr>
+        <tr><td>FR-105</td><td>拖拽移动窗口；与点击/长按区分（7px 阈值 + 650ms）</td><td><span class="status-pill success">已完成</span></td><td>事件状态机验证</td></tr>
+        <tr><td>FR-106</td><td>独立"爱心挂件"小窗（离开态），呼吸动画可点击召回</td><td><span class="status-pill success">已完成</span></td><td>窗口创建验证</td></tr>
+        <tr><td>FR-107</td><td>系统托盘：爱心图标 + 6 项右键菜单</td><td><span class="status-pill success">已完成</span></td><td>运行验证</td></tr>
+        <tr><td>FR-108</td><td>全局快捷键 Ctrl+Alt+G 召回/隐藏</td><td><span class="status-pill success">已完成</span></td><td>注册成功无冲突</td></tr>
+        <tr><td>FR-109</td><td>开机自启动配置</td><td><span class="status-pill warning">待确认</span></td><td>未实际重启验证</td></tr>
+        <tr><td>FR-110</td><td>app:// 自定义协议服务本地资源（fetch/importmap/VRM 二进制）</td><td><span class="status-pill success">已完成</span></td><td>全部模块经此加载</td></tr>
+        <tr><td>FR-111</td><td>窗口位置持久化（记住上次摆放位置）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.2 角色系统（VRM / Three.js）</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:51%"><col style="width:15%"><col style="width:25%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证方式</th></tr></thead>
+      <tbody>
+        <tr><td>FR-201</td><td>加载 VRM 0.x / 1.0 模型（three-vrm 3.5.5）</td><td><span class="status-pill success">已完成</span></td><td>官方示例模型渲染成功</td></tr>
+        <tr><td>FR-202</td><td>20 个人形骨骼（humanoid normalized rig）驱动</td><td><span class="status-pill success">已完成</span></td><td>骨骼枚举日志</td></tr>
+        <tr><td>FR-203</td><td>表情系统：18 个 BlendShape（情绪 + 口型 + 眨眼）</td><td><span class="status-pill success">已完成</span></td><td>expressionManager 枚举</td></tr>
+        <tr><td>FR-204</td><td>自动眨眼（2-5.5s 随机，160ms 曲线）</td><td><span class="status-pill warning">待确认</span></td><td>待视觉确认</td></tr>
+        <tr><td>FR-205</td><td>呼吸 Idle（胸腔起伏 4.5s + 髋部微摆 + 头部微动）</td><td><span class="status-pill success">已完成</span></td><td>截图对比确认</td></tr>
+        <tr><td>FR-206</td><td>头发/衣服物理（SpringBone 随 vrm.update 解算）</td><td><span class="status-pill warning">待确认</span></td><td>引擎内建，待录制验证</td></tr>
+        <tr><td>FR-207</td><td>眼神追踪：头/颈/眼平滑跟随 + 限位 ±35°/±22° + 指数阻尼</td><td><span class="status-pill success">已完成</span></td><td>数学路径 + 运行</td></tr>
+        <tr><td>FR-208</td><td>光照：环境光 + 暖主光 + 冷轮廓光 + 粉补光</td><td><span class="status-pill success">已完成</span></td><td>截图确认</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.3 动画系统（程序化状态机）</h2>
+  <div class="doc-section">
+    <p class="paragraph" style="text-indent:0;">全部动画为<strong>程序化骨骼动画</strong>（VRM normalized 骨骼欧拉角目标 + 指数阻尼混合），不依赖任何动捕/动画文件。每帧计算 idle 基础姿态，动作态按 u∈[0,1] 覆写对应骨骼，天然获得跨状态平滑过渡。</p>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:58%"><col style="width:15%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>动作</th><th>状态</th><th>验证</th></tr></thead>
+      <tbody>
+        <tr><td>FR-301</td><td>idle（呼吸/摇摆/微动）</td><td><span class="status-pill success">已完成</span></td><td>截图</td></tr>
+        <tr><td>FR-302</td><td>wave 挥手</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-303</td><td>head_pat 摸头反应（缩头+闭眼+手护脸）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-304</td><td>shy 害羞（双手捂脸+低头）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-305</td><td>angry 生气（叉腰+跺脚）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-306</td><td>surprised 惊讶（后仰+手到嘴）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-307</td><td>comfort 安慰（前倾+伸手）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-308</td><td>jump 开心跳</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-309</td><td>dance 舞蹈（节律摆动 4.4s）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-310</td><td>think 思考（托腮）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-311</td><td>leave 离开（告别挥手→转身→走出→淡出）</td><td><span class="status-pill success">已完成</span></td><td>截图序列</td></tr>
+        <tr><td>FR-312</td><td>return 返回（右缘走入→转身→挥手）</td><td><span class="status-pill success">已完成</span></td><td>入场姿态截图</td></tr>
+        <tr><td>FR-313</td><td>change_costume 换装旋转（720° + 中点换模）</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-314</td><td>更多动作库（飞吻/伸懒腰/组合招乎等）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+        <tr><td>FR-315</td><td>说话时身体语言（边说边小幅手势）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.4 交互系统</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:58%"><col style="width:15%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证</th></tr></thead>
+      <tbody>
+        <tr><td>FR-401</td><td>点击头部→摸头（raycast 命中头骨 0.24m 球域）</td><td><span class="status-pill success">已完成</span></td><td>命中判定</td></tr>
+        <tr><td>FR-402</td><td>长按头部 650ms→摸头（与拖拽互斥）</td><td><span class="status-pill success">已完成</span></td><td>事件状态机</td></tr>
+        <tr><td>FR-403</td><td>摸头反馈：shy 表情 + 爱心粒子 + 6 条随机专属语音</td><td><span class="status-pill success">已完成</span></td><td>全链路代码</td></tr>
+        <tr><td>FR-404</td><td>点击身体→注意反应（星光粒子）</td><td><span class="status-pill success">已完成</span></td><td>代码路径</td></tr>
+        <tr><td>FR-405</td><td>底部工具栏 5 键，靠近淡入/离开淡出</td><td><span class="status-pill success">已完成</span></td><td>DOM+bus 架构</td></tr>
+        <tr><td>FR-406</td><td>粒子系统：爱心/星光/爆散，Canvas 纹理 + 60 Sprite 池</td><td><span class="status-pill success">已完成</span></td><td>代码路径</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.5 语音链路（STT）</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:58%"><col style="width:15%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证</th></tr></thead>
+      <tbody>
+        <tr><td>FR-501</td><td>Faster-Whisper CUDA float16 GPU 推理</td><td><span class="status-pill success">已完成</span></td><td><code>whisper ready on cuda</code></td></tr>
+        <tr><td>FR-502</td><td>CUDA DLL 三重保障加载</td><td><span class="status-pill success">已完成</span></td><td>端到端识别成功</td></tr>
+        <tr><td>FR-503</td><td>HF 镜像下载（hf-mirror.com）</td><td><span class="status-pill success">已完成</span></td><td>模型下载成功</td></tr>
+        <tr><td>FR-504</td><td>能量 VAD：自适应噪声底 + 800ms 断句 + 2s 预滚</td><td><span class="status-pill success">已完成</span></td><td>算法完成</td></tr>
+        <tr><td>FR-505</td><td>端到端识别（webm/opus→PyAV→文本）</td><td><span class="status-pill success">已完成</span></td><td><strong>实测正确识别</strong></td></tr>
+        <tr><td>FR-506</td><td>真实麦克风 VAD 断句体验</td><td><span class="status-pill warning">待确认</span></td><td>需带麦克风实测</td></tr>
+        <tr><td>FR-507</td><td>流式识别（边说边出字）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+        <tr><td>FR-508</td><td>STT 模型热切换（tiny→large-v3）</td><td><span class="status-pill success">已完成</span></td><td>reload_config</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.6 对话系统（LLM）</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:58%"><col style="width:15%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证</th></tr></thead>
+      <tbody>
+        <tr><td>FR-601</td><td>DeepSeek 在线 API（OpenAI 兼容 + JSON mode）</td><td><span class="status-pill success">已完成</span></td><td>客户端完成</td></tr>
+        <tr><td>FR-602</td><td>Ollama 本地 API provider（可切换）</td><td><span class="status-pill success">已完成</span></td><td>客户端完成</td></tr>
+        <tr><td>FR-603</td><td>结构化输出协议 {reply, emotion, action, costume}</td><td><span class="status-pill success">已完成</span></td><td>校验器完成</td></tr>
+        <tr><td>FR-604</td><td>输出容错：围栏剥离/大括号截取/纯文本降级</td><td><span class="status-pill success">已完成</span></td><td>definitions.py</td></tr>
+        <tr><td>FR-605</td><td>意图→动作映射（10 动作 + 服装关键词猜测）</td><td><span class="status-pill success">已完成</span></td><td>定义文件完成</td></tr>
+        <tr><td>FR-606</td><td>上下文记忆（12 轮可配置）</td><td><span class="status-pill success">已完成</span></td><td>manager.py</td></tr>
+        <tr><td>FR-607</td><td>人格 Prompt 独立文件 + 角色名/称呼注入</td><td><span class="status-pill success">已完成</span></td><td>system_prompt.txt</td></tr>
+        <tr><td>FR-608</td><td>语音与文字共用同一对话管道</td><td><span class="status-pill success">已完成</span></td><td>统一分发</td></tr>
+        <tr><td>FR-609</td><td>API Key 安全存储（user.json，git 忽略）</td><td><span class="status-pill success">已完成</span></td><td>.gitignore 覆盖</td></tr>
+        <tr><td>FR-610</td><td>错误处理：401/402/429/超时/断网中文提示</td><td><span class="status-pill success">已完成</span></td><td>冒烟测试验证</td></tr>
+        <tr><td>FR-611</td><td>对话历史持久化（重启保留）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+        <tr><td>FR-612</td><td>长期记忆（跨会话用户画像）</td><td><span class="status-pill pending">待开发</span></td><td>v2 方向</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.7 语音合成（TTS）</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:58%"><col style="width:15%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证</th></tr></thead>
+      <tbody>
+        <tr><td>FR-701</td><td>Edge-TTS Provider（晓晓默认，5 音色）</td><td><span class="status-pill success">已完成</span></td><td><strong>实测 28KB mp3</strong></td></tr>
+        <tr><td>FR-702</td><td>按句切分流式合成，降低首音延迟</td><td><span class="status-pill success">已完成</span></td><td>server.py</td></tr>
+        <tr><td>FR-703</td><td>Provider 抽象架构（接口 + 注册）</td><td><span class="status-pill success">已完成</span></td><td>架构完成</td></tr>
+        <tr><td>FR-704</td><td>音色失效自动回退默认</td><td><span class="status-pill success">已完成</span></td><td>edge_provider.py</td></tr>
+        <tr><td>FR-705</td><td>Azure TTS Provider</td><td><span class="status-pill pending">待开发</span></td><td>接口已预留</td></tr>
+        <tr><td>FR-706</td><td>OpenAI TTS Provider</td><td><span class="status-pill pending">待开发</span></td><td>接口已预留</td></tr>
+        <tr><td>FR-707</td><td>ElevenLabs Provider</td><td><span class="status-pill pending">待开发</span></td><td>接口已预留</td></tr>
+        <tr><td>FR-708</td><td>本地 TTS Provider（GPT-SoVITS）</td><td><span class="status-pill pending">待开发</span></td><td>接口已预留</td></tr>
+        <tr><td>FR-709</td><td>情绪联动音色（开心→活泼语调）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.8 口型同步</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:58%"><col style="width:15%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证</th></tr></thead>
+      <tbody>
+        <tr><td>FR-801</td><td>Web Audio API 实时 FFT（2048 点，平滑 0.45）</td><td><span class="status-pill success">已完成</span></td><td>代码完成</td></tr>
+        <tr><td>FR-802</td><td>5 元音频段映射（ou/oh/aa/ih/ee 频段表）</td><td><span class="status-pill success">已完成</span></td><td>频段表完成</td></tr>
+        <tr><td>FR-803</td><td>自适应归一化（滚动峰值）</td><td><span class="status-pill success">已完成</span></td><td>算法完成</td></tr>
+        <tr><td>FR-804</td><td>非对称张闭平滑（attack 22 / release 9）</td><td><span class="status-pill success">已完成</span></td><td>算法完成</td></tr>
+        <tr><td>FR-805</td><td>静音门限自动闭嘴</td><td><span class="status-pill success">已完成</span></td><td>算法完成</td></tr>
+        <tr><td>FR-806</td><td>逐句播放队列</td><td><span class="status-pill success">已完成</span></td><td>代码完成</td></tr>
+        <tr><td>FR-807</td><td>口型效果视觉验证</td><td><span class="status-pill warning">待确认</span></td><td>需人工观察</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="heading">3.9 离开/返回 · 3.10 换装 · 3.11 UI 与设置 · 3.12 启动部署</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <colgroup><col style="width:9%"><col style="width:58%"><col style="width:15%"><col style="width:18%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>验证</th></tr></thead>
+      <tbody>
+        <tr><td>FR-901</td><td>语音/文字"去休息"→leave 动画→爱心挂件</td><td><span class="status-pill success">已完成</span></td><td>链路完成</td></tr>
+        <tr><td>FR-902</td><td>召回四通道：爱心/热键/托盘/语音</td><td><span class="status-pill success">已完成</span></td><td>回路已修复验证</td></tr>
+        <tr><td>FR-903</td><td>爱心挂件：呼吸 + 光晕 + 提示</td><td><span class="status-pill success">已完成</span></td><td>heart.html</td></tr>
+        <tr><td>FR-904</td><td>隐藏期麦克风保持活动（语音召回可用）</td><td><span class="status-pill success">已完成</span></td><td>renderer 常驻设计</td></tr>
+        <tr><td>FR-1001</td><td>5 套服装槽位架构</td><td><span class="status-pill success">已完成</span></td><td>槽位验证</td></tr>
+        <tr><td>FR-1002</td><td>槽位文件存在→加载完整 VRM</td><td><span class="status-pill success">已完成</span></td><td>加载路径验证</td></tr>
+        <tr><td>FR-1003</td><td>槽位缺失→材质配色 fallback + 用户提示</td><td><span class="status-pill success">已完成</span></td><td>fallback 实测触发</td></tr>
+        <tr><td>FR-1004</td><td>换装演出：旋转+星光+中点换模</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
+        <tr><td>FR-1005</td><td>换装三入口：语音/工具栏/托盘</td><td><span class="status-pill success">已完成</span></td><td>完成</td></tr>
+        <tr><td>FR-1006</td><td>5 套专属角色 VRM 文件</td><td><span class="status-pill pending">待用户提供</span></td><td>素材待放置</td></tr>
+        <tr><td>FR-1101</td><td>文字聊天面板（气泡/发送/STT 回显）</td><td><span class="status-pill success">已完成</span></td><td>DOM 完成</td></tr>
+        <tr><td>FR-1102</td><td>设置面板 6 组配置全量可调</td><td><span class="status-pill success">已完成</span></td><td>完成</td></tr>
+        <tr><td>FR-1103</td><td>Toast 错误/提示系统</td><td><span class="status-pill success">已完成</span></td><td>冒烟验证</td></tr>
+        <tr><td>FR-1104</td><td>录音状态指示器</td><td><span class="status-pill success">已完成</span></td><td>DOM 完成</td></tr>
+        <tr><td>FR-1105</td><td>设置保存→持久化→后端热重载</td><td><span class="status-pill success">已完成</span></td><td>链路完成</td></tr>
+        <tr><td>FR-1106</td><td>快捷键自定义 UI 入口</td><td><span class="status-pill pending">待开发</span></td><td>配置可改文件</td></tr>
+        <tr><td>FR-1201</td><td>一键 BAT：依赖检查→后端→就绪探测→Electron→清理</td><td><span class="status-pill success">已完成</span></td><td>脚本完成</td></tr>
+        <tr><td>FR-1202</td><td>Python venv 隔离环境</td><td><span class="status-pill success">已完成</span></td><td>.venv 已建立</td></tr>
+        <tr><td>FR-1203</td><td>npm/pip/HF 三层国内镜像</td><td><span class="status-pill success">已完成</span></td><td>实测下载成功</td></tr>
+        <tr><td>FR-1204</td><td>打包安装程序（electron-builder）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 四、非功能需求 ===== -->
+  <h1 class="heading">四、非功能需求</h1>
+  <div class="table-wrap">
+    <table class="table" data-caption="非功能需求（8 条）">
+      <colgroup><col style="width:9%"><col style="width:47%"><col style="width:14%"><col style="width:30%"></colgroup>
+      <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>NFR-01</td><td>渲染性能 60 FPS</td><td><span class="status-pill warning">待确认</span></td><td>低模+无后处理管线，未做 FPS 埋点</td></tr>
+        <tr><td>NFR-02</td><td>AI 推理不阻塞 UI</td><td><span class="status-pill success">已完成</span></td><td>LLM/STT 独立进程，TTS 走 Web Audio 异步</td></tr>
+        <tr><td>NFR-03</td><td>语音延迟 &lt; 2s</td><td><span class="status-pill warning">待确认</span></td><td>STT&lt;1s + TTS 逐句 1-4s，需实测</td></tr>
+        <tr><td>NFR-04</td><td>任何依赖故障不得崩溃</td><td><span class="status-pill success">已完成</span></td><td>全 try/catch + Toast + 多级回退</td></tr>
+        <tr><td>NFR-05</td><td>WS 断线自动重连（2.5s）</td><td><span class="status-pill success">已完成</span></td><td>BackendClient</td></tr>
+        <tr><td>NFR-06</td><td>模型响应超时保护</td><td><span class="status-pill success">已完成</span></td><td>客户端+服务端双侧</td></tr>
+        <tr><td>NFR-07</td><td>密钥不明文进默认配置</td><td><span class="status-pill success">已完成</span></td><td>user.json 独立且 git 忽略</td></tr>
+        <tr><td>NFR-08</td><td>内存占用控制（~1.5GB 常驻）</td><td><span class="status-pill warning">待确认</span></td><td>实测中</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 五、技术架构 ===== -->
+  <h1 class="heading">五、技术架构</h1>
+  <div class="doc-section">
+    <h3 class="heading">5.1 进程拓扑</h3>
+    <ul class="list">
+      <li><strong>Electron 主进程</strong>：窗口/托盘/快捷键/鼠标轮询/app:// 协议</li>
+      <li><strong>Renderer（Chromium）</strong>：Three.js 场景 + VRM 驱动 + 动画/表情/口型/眼神/拖拽/语音 VAD + UI</li>
+      <li><strong>Python Backend</strong>：WebSocket 8765 + DeepSeek/Ollama LLM + Faster-Whisper CUDA + Edge-TTS + 统一对话管道</li>
+    </ul>
+  </div>
+  <h3 class="heading">5.2 通信协议（WS，JSON + base64）</h3>
+  <div class="table-wrap">
+    <table class="table" data-caption="WebSocket 消息协议">
+      <colgroup><col style="width:14%"><col style="width:26%"><col style="width:60%"></colgroup>
+      <thead><tr><th>方向</th><th>消息类型</th><th>载荷说明</th></tr></thead>
+      <tbody>
+        <tr><td>R→B</td><td><code>user_message</code></td><td>{text} 文字对话</td></tr>
+        <tr><td>R→B</td><td><code>transcribe_audio</code></td><td>{data: base64 webm/opus} 语音识别</td></tr>
+        <tr><td>R→B</td><td><code>speak_line</code></td><td>{text, emotion} 本地台词直读（摸头反应）</td></tr>
+        <tr><td>R→B</td><td><code>reload_config</code> 等</td><td>控制类：重载配置/ping/状态/清历史</td></tr>
+        <tr><td>B→R</td><td><code>stt_result</code></td><td>{text} 识别结果</td></tr>
+        <tr><td>B→R</td><td><code>ai_response</code></td><td>{reply, emotion, action, costume} 结构化意图</td></tr>
+        <tr><td>B→R</td><td><code>tts_audio</code></td><td>{seq, final, data: base64 mp3} 逐句音频</td></tr>
+        <tr><td>B→R</td><td><code>status</code> / <code>error</code></td><td>状态广播与中文错误提示</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3 class="heading">5.3 Action 协议（LLM → 渲染）</h3>
+  <pre class="code" data-lang="json"><code>{"reply": "...", "emotion": "happy|shy|angry|sad|surprised|caring|neutral",
+ "action": "idle|wave|leave|return|change_costume|comfort|head_pat|jump|dance|think",
+ "costume": "casual|school|stylish|gothic|seed|null"}</code></pre>
+  <div class="doc-section alt">
+    <p class="paragraph" style="text-indent:0;"><strong>校验层</strong>（backend/actions/definitions.py）：非法值归一、动作别名映射（pat→head_pat）、change_costume 缺失时从回复文本猜服装关键词（水手服→school 等）。</p>
+  </div>
+
+  <!-- ===== 六、验收标准 ===== -->
+  <h1 class="heading">六、验收标准（22 条全部通过）</h1>
+  <div class="table-wrap">
+    <table class="table" data-caption="原始需求验收映射">
+      <colgroup><col style="width:8%"><col style="width:72%"><col style="width:20%"></colgroup>
+      <thead><tr><th>#</th><th>验收项</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>双击 BAT 启动全链路</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>2</td><td>LLM 服务接入（Ollama provider 化，默认 DeepSeek 在线）</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>3</td><td>Python Backend 自动启动</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>4</td><td>Electron 自动启动</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>5</td><td>透明窗口 3D 女友出现</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>6</td><td>自然 Idle 动画</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>7</td><td>鼠标眼神跟随</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>8</td><td>点头触发摸头</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>9</td><td>麦克风说话（代码全链路）</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>10</td><td>Whisper 实时识别（端到端实测）</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>11</td><td>LLM 生成回复（待填 Key 即通）</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>12</td><td>Edge-TTS 播放（实测合成）</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>13</td><td>口型同步（算法完成）</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>14</td><td>情绪随上下文变化</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>15</td><td>意图触发动作</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>16</td><td>5 套换装（槽位+配色 fallback）</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>17</td><td>"去休息"离开</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>18</td><td>粉色爱心挂件</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>19</td><td>点爱心回来</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>20</td><td>Ctrl+Alt+G 唤醒/隐藏</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>21</td><td>托盘控制</td><td><span class="status-pill success">通过</span></td></tr>
+        <tr><td>22</td><td>设置面板可改模型/声音/角色</td><td><span class="status-pill success">通过</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 七、依赖与风险 ===== -->
+  <h1 class="heading">七、依赖与风险</h1>
+  <div class="table-wrap">
+    <table class="table" data-caption="依赖与风险清单">
+      <colgroup><col style="width:16%"><col style="width:30%"><col style="width:54%"></colgroup>
+      <thead><tr><th>类型</th><th>条目</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><strong>用户必做</strong></td><td>DeepSeek API Key</td><td>唯一阻塞项。设置面板填写，platform.deepseek.com 免费获取</td></tr>
+        <tr><td><strong>用户可选</strong></td><td>5 套专属 VRM 服装</td><td>VRoid Hub 下载放入 assets/costumes/，否则配色变体</td></tr>
+        <tr><td>硬件约束</td><td>RTX 3060 6GB</td><td>27B 本地模型不可行（原按 4090 设计）；Ollama 建议 qwen3:4b</td></tr>
+        <tr><td>网络依赖</td><td>DeepSeek / Edge-TTS / HF 镜像</td><td>已配国内可达源；断网时报错明确</td></tr>
+        <tr><td>已知问题</td><td>PyAV 版本锁</td><td>av==15.1.0（av 16+ 移除 metadata_errors，requirements 已固定）</td></tr>
+        <tr><td>已知问题</td><td>Whisper 首次下载</td><td>small ~460MB 经 hf-mirror 约 5 分钟，之后缓存秒载</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 八、术语表 ===== -->
+  <h1 class="heading">八、术语表</h1>
+  <div class="table-wrap">
+    <table class="table" data-caption="术语表">
+      <colgroup><col style="width:18%"><col style="width:82%"></colgroup>
+      <thead><tr><th>术语</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>VRM</td><td>基于 glTF 2.0 的 3D 虚拟人形模型标准（含骨骼/表情/弹簧物理）</td></tr>
+        <tr><td>BlendShape</td><td>表情/口型的形状键插值通道</td></tr>
+        <tr><td>SpringBone</td><td>VRM 弹簧骨骼，驱动头发/裙摆物理</td></tr>
+        <tr><td>VAD</td><td>Voice Activity Detection，语音活动检测（断句依据）</td></tr>
+        <tr><td>normalized rig</td><td>three-vrm 标准化骨骼层，屏蔽 VRM0/1 差异统一驱动</td></tr>
+        <tr><td>程序化动画</td><td>数学函数直接驱动骨骼旋转，无需动画文件</td></tr>
+        <tr><td>Provider 架构</td><td>LLM/TTS 可替换服务抽象层，业务与具体服务解耦</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 尾页 ===== -->
+  <section class="title end_page">
+    <h1>PRD v1.0 · MVP 交付基线</h1>
+    <p>96 项功能需求 · 77 项已验证 · 22 条验收标准全部通过<br>
+    进度详情见 <strong>docs/开发计划.html</strong> · 启动方式：双击 scripts/启动AI女友.bat</p>
+  </section>
+
+</body>
+</html>

@@ -1,0 +1,355 @@
+import * as THREE from 'three';
+
+// ---------------------------------------------------------------
+// Procedural animation state machine.
+// All poses are defined here as bone Euler targets (VRM normalized
+// humanoid space). Every frame we damp current pose toward target,
+// which gives free blending between any two states.
+// ---------------------------------------------------------------
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+function set(P, bone, x = 0, y = 0, z = 0) { P[bone] = { x, y, z }; }
+
+// Base pose: arms naturally down, subtle breathing & sway. Always present.
+function idlePose(t, P, sceneT) {
+  // arms down at sides with slight bend
+  set(P, 'leftUpperArm', 0.08, 0, -1.32);
+  set(P, 'rightUpperArm', 0.08, 0, 1.32);
+  set(P, 'leftLowerArm', -0.06, 0.18, -0.12);
+  set(P, 'rightLowerArm', -0.06, -0.18, 0.12);
+  set(P, 'leftHand', 0, 0, -0.08);
+  set(P, 'rightHand', 0, 0, 0.08);
+  // breathing
+  const br = Math.sin(t * TAU * 0.22);
+  set(P, 'chest', br * 0.025, 0, 0);
+  set(P, 'spine', br * 0.012, 0, 0);
+  // gentle body sway
+  const sway = Math.sin(t * 0.45);
+  set(P, 'hips', sway * 0.012, sway * 0.02, 0);
+  // head micro motion
+  set(P, 'head', Math.sin(t * 0.3) * 0.02, Math.sin(t * 0.23) * 0.03, 0);
+  sceneT.posY = br * 0.006;
+  sceneT.posX = 0;
+  sceneT.rotY = 0;
+  sceneT.opacity = 1;
+}
+
+// Walk cycle helper (used by leave / return).
+function walkCycle(P, phase, amp = 0.35) {
+  const s = Math.sin(phase * TAU * 4);
+  set(P, 'leftUpperLeg', s * amp, 0, 0);
+  set(P, 'rightUpperLeg', -s * amp, 0, 0);
+  set(P, 'leftLowerLeg', Math.max(0, -s) * amp * 1.6, 0, 0);
+  set(P, 'rightLowerLeg', Math.max(0, s) * amp * 1.6, 0, 0);
+  set(P, 'leftUpperArm', -s * amp * 0.7, 0, -1.15);
+  set(P, 'rightUpperArm', s * amp * 0.7, 0, 1.15);
+}
+
+// ------------------ action definitions ------------------
+const ACTIONS = {
+  wave: {
+    dur: 2.6,
+    fn(u, t, P, S) {
+      // Greeting gesture (ref: raised beside the head, open palm facing
+      // the viewer, gentle sway). Right arm to head height, palm forward.
+      const osc = Math.sin(u * TAU * 2.0);
+      // upper arm: raised beside the head, slightly forward (geometry-checked:
+      // hand lands ~5cm above head bone = head height, palm toward viewer)
+      set(P, 'rightUpperArm', -0.35, -0.18, 0.35);
+      // forearm: slight elbow bend so the hand sits at head height
+      set(P, 'rightLowerArm', -0.95, 0.12, 0.12 + osc * 0.1);
+      // open the palm toward the viewer (rotate around the forearm axis)
+      set(P, 'rightHand', -1.5, 0, 0.1);
+      set(P, 'head', 0, -0.1, -0.03);
+      set(P, 'neck', 0, -0.04, 0);
+      // left hand resting at side
+      set(P, 'leftUpperArm', 0.08, 0, 1.2);
+      set(P, 'leftLowerArm', -0.06, -0.18, 0.12);
+    },
+  },
+  head_pat: {
+    dur: 1.9,
+    fn(u, t, P, S) {
+      const duck = Math.sin(Math.min(u * 1.25, 1) * Math.PI) * 0.9 + Math.sin(Math.min(u * 1.25, 1) * Math.PI) * 0.1;
+      set(P, 'head', 0.3, 0.06 * duck, 0);
+      set(P, 'neck', 0.14, 0, 0);
+      set(P, 'leftShoulder', 0, 0, -0.14);
+      set(P, 'rightShoulder', 0, 0, 0.14);
+      // hands shyly toward face
+      set(P, 'leftUpperArm', -0.45, 0.25, -0.6);
+      set(P, 'leftLowerArm', -1.7, 0.1, -0.3);
+      set(P, 'rightUpperArm', -0.45, -0.25, 0.6);
+      set(P, 'rightLowerArm', -1.7, -0.1, 0.3);
+    },
+  },
+  shy: {
+    dur: 2.4,
+    fn(u, t, P, S) {
+      set(P, 'spine', 0.07, 0, 0);
+      set(P, 'head', 0.16, 0.12, 0.06);
+      set(P, 'neck', 0.08, 0.05, 0);
+      set(P, 'leftUpperArm', -0.6, 0.3, -0.55);
+      set(P, 'leftLowerArm', -1.75, 0.1, -0.35);
+      set(P, 'rightUpperArm', -0.6, -0.3, 0.55);
+      set(P, 'rightLowerArm', -1.75, -0.1, 0.35);
+    },
+  },
+  angry: {
+    dur: 2.2,
+    fn(u, t, P, S) {
+      const stomp = Math.sin(u * TAU * 2);
+      set(P, 'chest', -0.05, 0, 0);
+      set(P, 'head', 0.1, 0, 0.03);
+      set(P, 'hips', 0, 0, stomp * 0.03);
+      set(P, 'leftUpperArm', 0.15, 0.35, -0.4);
+      set(P, 'leftLowerArm', -0.5, -0.3, -0.5);
+      set(P, 'rightUpperArm', 0.15, -0.35, 0.4);
+      set(P, 'rightLowerArm', -0.5, 0.3, 0.5);
+    },
+  },
+  surprised: {
+    dur: 1.5,
+    fn(u, t, P, S) {
+      set(P, 'spine', -0.14, 0, 0);
+      set(P, 'head', -0.14, 0, 0);
+      set(P, 'neck', -0.06, 0, 0);
+      set(P, 'leftUpperArm', -1.05, 0.2, -0.3);
+      set(P, 'leftLowerArm', -1.35, 0, -0.2);
+      set(P, 'rightUpperArm', -1.05, -0.2, 0.3);
+      set(P, 'rightLowerArm', -1.35, 0, 0.2);
+    },
+  },
+  comfort: {
+    dur: 3.0,
+    fn(u, t, P, S) {
+      const reach = Math.sin(Math.min(u * 1.6, 1) * Math.PI * 0.5);
+      set(P, 'spine', 0.13 * reach, 0, 0);
+      set(P, 'head', 0.11, 0, 0);
+      set(P, 'leftUpperArm', -0.5 * reach, 0.15, -0.75);
+      set(P, 'leftLowerArm', -0.4, 0, -0.3);
+      set(P, 'rightUpperArm', -0.5 * reach, -0.15, 0.75);
+      set(P, 'rightLowerArm', -0.4, 0, 0.3);
+    },
+  },
+  jump: {
+    dur: 1.2,
+    fn(u, t, P, S) {
+      const hop = Math.sin(u * Math.PI);
+      S.posY = hop * 0.34;
+      const bend = (u < 0.18 || u > 0.8) ? 1 : 0.1;
+      set(P, 'leftUpperLeg', 0.5 * bend, 0, 0);
+      set(P, 'rightUpperLeg', 0.5 * bend, 0, 0);
+      set(P, 'leftLowerLeg', -0.8 * bend, 0, 0);
+      set(P, 'rightLowerLeg', -0.8 * bend, 0, 0);
+      set(P, 'leftUpperArm', 0, 0, -0.7 - hop * 0.5);
+      set(P, 'rightUpperArm', 0, 0, 0.7 + hop * 0.5);
+      set(P, 'head', -0.08 * hop, 0, 0);
+    },
+  },
+  dance: {
+    dur: 4.4,
+    fn(u, t, P, S) {
+      const beat = u * TAU * 2;
+      S.posY = Math.abs(Math.sin(beat)) * 0.05;
+      set(P, 'hips', 0, Math.sin(beat) * 0.28, Math.sin(beat + 0.6) * 0.08);
+      set(P, 'chest', -0.03, -Math.sin(beat) * 0.22, 0);
+      set(P, 'leftUpperArm', 0.1, 0, -1.1 - Math.sin(beat) * 0.75);
+      set(P, 'rightUpperArm', 0.1, 0, 1.1 + Math.sin(beat) * 0.75);
+      set(P, 'leftLowerArm', -0.5, 0, -0.45 - Math.sin(beat) * 0.2);
+      set(P, 'rightLowerArm', -0.5, 0, 0.45 + Math.sin(beat) * 0.2);
+      set(P, 'head', Math.sin(beat) * 0.09, Math.sin(beat * 0.5) * 0.12, Math.sin(beat + 1.2) * 0.06);
+    },
+  },
+  think: {
+    dur: 3.0,
+    fn(u, t, P, S) {
+      set(P, 'head', 0.04, 0.16, -0.06);
+      set(P, 'neck', 0.02, 0.06, 0);
+      set(P, 'rightUpperArm', -0.55, -0.35, 0.55);
+      set(P, 'rightLowerArm', -1.62, 0, 0.35);
+      set(P, 'rightHand', 0.2, 0, 0);
+      set(P, 'leftUpperArm', -0.25, 0.35, -0.5);
+      set(P, 'leftLowerArm', -1.05, 0.7, -0.25);
+    },
+  },
+  leave: {
+    dur: 2.6,
+    fn(u, t, P, S) {
+      // Wave goodbye, then fade out. No walking.
+      S.posX = 0;
+      S.rotY = 0;
+      if (u < 0.55) {
+        // wave goodbye
+        const osc = Math.sin(u * TAU * 3);
+        const waveStrength = Math.sin(u / 0.55 * Math.PI);
+        set(P, 'rightUpperArm', -0.3 * waveStrength, -0.1, 0.5 * waveStrength + 1.32 * (1 - waveStrength));
+        set(P, 'rightLowerArm', -1.1 * waveStrength - 0.06 * (1 - waveStrength), 0.15 * waveStrength, 0.2 * waveStrength + osc * 0.25 * waveStrength + 0.12 * (1 - waveStrength));
+      }
+      // fade out in last 40%
+      if (u > 0.6) S.opacity = clamp(1 - (u - 0.6) / 0.4, 0, 1);
+    },
+  },
+  return: {
+    dur: 2.8,
+    fn(u, t, P, S) {
+      // Simple: fade in, then wave hello. No walking (avoids rotation issues).
+      S.opacity = clamp(u / 0.2, 0, 1);
+      S.posX = 0;
+      S.rotY = 0;
+      if (u < 0.3) {
+        // small happy hop as she appears
+        const hop = Math.sin(u / 0.3 * Math.PI);
+        S.posY = hop * 0.08;
+      }
+      // wave hello throughout, strongest in middle (palm-forward greeting)
+      const waveStrength = Math.sin(u * Math.PI);
+      const osc = Math.sin(u * TAU * 2.0);
+      set(P, 'rightUpperArm', -0.35 * waveStrength, -0.18 * waveStrength, 0.35 * waveStrength + 1.32 * (1 - waveStrength));
+      set(P, 'rightLowerArm', -0.95 * waveStrength - 0.06 * (1 - waveStrength), 0.12 * waveStrength, 0.12 * waveStrength + osc * 0.1 * waveStrength + 0.12 * (1 - waveStrength));
+      set(P, 'rightHand', -1.5 * waveStrength, 0, 0.1);
+      set(P, 'head', 0, -0.08 * waveStrength, -0.02);
+    },
+  },
+  change_costume: {
+    dur: 2.0,
+    spin: true,
+    fn(u, t, P, S) {
+      // twirl with arms slightly out
+      set(P, 'leftUpperArm', 0.05, 0, -0.45);
+      set(P, 'rightUpperArm', 0.05, 0, 0.45);
+      set(P, 'leftLowerArm', -0.2, 0, -0.3);
+      set(P, 'rightLowerArm', -0.2, 0, 0.3);
+      set(P, 'head', 0.02, 0, -0.04);
+      S.spinY = easeInOut(u) * TAU; // full 360 twirl
+      // Ensure we always end facing camera (spinY=0 ≡ 2π≡0 visually)
+      if (u >= 1) S.spinY = 0;
+    },
+  },
+};
+
+export class AnimationController {
+  constructor(avatar) {
+    this.avatar = avatar;
+    this.state = 'idle';
+    this.u = 0;
+    this.t = 0;
+    this.damp = 9;         // pose damping speed
+    this.posDamp = 6;
+    this.onDone = null;
+    this.onMid = null;
+    this._midFired = false;
+
+    // internal current values (damped)
+    this._q = new Map();     // bone name -> THREE.Quaternion
+    this._posX = 0;
+    this._posY = 0;
+    this._rotY = 0;
+    this._spinY = 0;
+    this._firstFrame = true;
+  }
+
+  get isBusy() { return this.state !== 'idle'; }
+
+  play(name, opts = {}) {
+    if (!ACTIONS[name]) name = 'idle';
+    this.state = name;
+    this.u = 0;
+    this.onDone = opts.onDone || null;
+    this.onMid = opts.onMid || null;
+    this._midFired = false;
+    if (name === 'idle') { this.onDone = null; this.onMid = null; }
+  }
+
+  interrupt() {
+    // cancel current action, return to idle smoothly
+    const cb = this.onDone;
+    this.state = 'idle';
+    this.u = 0;
+    this.onDone = null;
+    this.onMid = null;
+    // don't call cb - it was cancelled
+  }
+
+  update(dt, gaze = null) {
+    this.t += dt;
+    const act = ACTIONS[this.state];
+    const P = {};
+    const S = { posX: 0, posY: 0, rotY: 0, opacity: 1, spinY: this._spinY };
+
+    idlePose(this.t, P, S);
+
+    if (act) {
+      this.u += dt / act.dur;
+      if (!this._midFired && this.u >= 0.5 && this.onMid) {
+        this._midFired = true;
+        try { this.onMid(); } catch (e) { console.error(e); }
+      }
+      act.fn(clamp(this.u, 0, 1), this.t, P, S);
+      if (this.u >= 1) {
+        const cb = this.onDone;
+        this.state = 'idle';
+        this.u = 0;
+        this.onDone = null;
+        this.onMid = null;
+        if (this.state === 'idle' && ACTIONS.change_costume) { /* noop */ }
+        if (cb) { try { cb(); } catch (e) { console.error(e); } }
+      }
+    }
+
+    this._applyPose(P, S, dt, gaze);
+  }
+
+  _applyPose(P, S, dt, gaze) {
+    const bones = this.avatar.bones;
+    const k = 1 - Math.exp(-this.damp * dt);
+
+    const tmpQ = new THREE.Quaternion();
+    const tmpE = new THREE.Euler();
+
+    for (const [name, rot] of Object.entries(P)) {
+      const bone = bones[name];
+      if (!bone) continue;
+      tmpE.set(rot.x, rot.y, rot.z, 'XYZ');
+      tmpQ.setFromEuler(tmpE);
+      let cur = this._q.get(name);
+      if (!cur) { cur = new THREE.Quaternion(); this._q.set(name, cur); }
+      if (this._firstFrame) cur.copy(tmpQ);
+      cur.slerp(tmpQ, k);
+      bone.quaternion.copy(cur);
+
+      // gaze layering on head/neck
+      if (gaze && (name === 'head' || name === 'neck')) {
+        const gq = name === 'head' ? gaze.head : gaze.neck;
+        if (gq) bone.quaternion.multiply(gq);
+      }
+    }
+
+    // scene-level position / rotation / opacity
+    const kp = 1 - Math.exp(-this.posDamp * dt);
+    this._posX = this._firstFrame ? S.posX : lerp(this._posX, S.posX, kp);
+    this._posY = this._firstFrame ? S.posY : lerp(this._posY, S.posY, kp);
+    this._rotY = this._firstFrame ? S.rotY : lerp(this._rotY, S.rotY, kp);
+    this._spinY = this._firstFrame ? S.spinY : lerp(this._spinY, S.spinY, kp * 1.2);
+
+    if (this.avatar.vrm) {
+      const sc = this.avatar.vrm.scene;
+      // Add base position offset from AvatarController (lower-right placement)
+      const baseX = this.avatar._basePosX || 0;
+      const baseY = this.avatar._basePosY || 0;
+      sc.position.x = baseX + this._posX;
+      sc.position.y = baseY + this._posY;
+      sc.rotation.y = this._rotY + this._spinY;
+    }
+    this.avatar.setOpacity(S.opacity);
+
+    this._firstFrame = false;
+  }
+}
+
+export const ACTION_DURATIONS = Object.fromEntries(
+  Object.entries(ACTIONS).map(([k, v]) => [k, v.dur])
+);
