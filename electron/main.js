@@ -21,7 +21,20 @@ app.commandLine.appendSwitch('disable-background-timer-throttling');
 const ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config', 'config.json');
 const USER_CONFIG_PATH = path.join(ROOT, 'config', 'user.json');
-const ICON_PATH = path.join(ROOT, 'assets', 'icons', 'heart.png');
+const ICON_PATH = path.join(ROOT, 'assets', 'icons', 'girl.png');
+const FALLBACK_ICON_PATH = path.join(ROOT, 'assets', 'icons', 'heart.png');
+
+// ---------- single instance lock ----------
+// Prevents accidental double-launch (two characters on screen, two tray
+// icons). A second launch just wakes the existing instance and exits.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  console.log('[main] another instance is running - exiting');
+  app.quit();
+} else {
+  // Someone tried to launch the app again — wake the existing one instead.
+  app.on('second-instance', () => { try { setHeartMode(false); } catch {} });
+}
 
 // ---------- protocol registration (before app ready) ----------
 protocol.registerSchemesAsPrivileged([
@@ -70,12 +83,13 @@ function saveUserConfig(patch) {
 }
 
 function ensureIcon() {
-  if (fs.existsSync(ICON_PATH)) return;
+  if (fs.existsSync(ICON_PATH)) return; // real app icon from repo
+  if (fs.existsSync(FALLBACK_ICON_PATH)) return;
   // Minimal pink heart PNG (16x16) embedded as base64, written once for tray.
-  const b64 = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAL0lEQVR4nO3OQQ0AAAjEsPn5GTsBBa1ZgQZpEhBwVlO/zMzMBnZ3d3f3d4arxwYc3wAAAABJRU5ErkJggg==';
+  const b64 = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAL0lEQVR42u3OOQ0AAAjEsPn5GTsBBa1ZgQZpEhBwVlO/zMzMBnZ3d3f3d4arxwYc3wAAAABJRU5ErkJggg==';
   try {
     fs.mkdirSync(path.dirname(ICON_PATH), { recursive: true });
-    fs.writeFileSync(ICON_PATH, Buffer.from(b64, 'base64'));
+    fs.writeFileSync(FALLBACK_ICON_PATH, Buffer.from(b64, 'base64'));
   } catch {}
 }
 
@@ -101,6 +115,7 @@ function createMainWindow(cfg) {
     skipTaskbar: cfg.window.skip_taskbar !== false,
     alwaysOnTop: true,
     backgroundColor: '#00000000',
+    icon: path.join(ROOT, 'assets', 'icons', 'girl-256.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -182,7 +197,9 @@ function setHeartMode(showHeart) {
 function buildTray(cfg) {
   ensureIcon();
   const icon = nativeImage.createFromPath(ICON_PATH);
-  tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
+  const fb = nativeImage.createFromPath(FALLBACK_ICON_PATH);
+  const use = !icon.isEmpty() ? icon : (!fb.isEmpty() ? fb : nativeImage.createEmpty());
+  tray = new Tray(use);
   tray.setToolTip('AI 女友');
 
   const costumeSub = [
@@ -273,6 +290,7 @@ function setupIpc() {
 
 // ---------- app lifecycle ----------
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return; // second instance: just quitting
   const cfg = loadConfig();
   setupPermissions();
   setupIpc();

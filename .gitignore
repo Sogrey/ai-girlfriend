@@ -6,3 +6,4 @@ __pycache__/
 config/user.json
 dist/
 npm-debug.log*
+backend.pid

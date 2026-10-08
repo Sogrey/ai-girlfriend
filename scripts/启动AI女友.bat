@@ -10,7 +10,7 @@ echo.
 REM ---- 1. Check dependencies ----
 if not exist ".venv\Scripts\python.exe" (
   echo [X] Python venv not found: .venv
-  echo     Run scripts\????.bat first, or see README.md
+  echo     Run the first-time setup script, or see README.md
   echo.
   pause
   exit /b 1
@@ -24,10 +24,15 @@ if not exist "node_modules\electron\dist\electron.exe" (
 )
 echo [OK] Dependencies ready
 
-REM ---- 2. Start Python backend ----
+REM ---- 2. Start Python backend (skip if one is already running) ----
 echo.
 echo [1/3] Starting Python backend - WebSocket 127.0.0.1:8765 ...
-start "AI-Girlfriend-Backend" /min .venv\Scripts\pythonw.exe backend\main.py
+powershell -NoProfile -Command "try{ $c=New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1',8765); $c.Close(); exit 0 }catch{ exit 1 }" >nul 2>&1
+if %errorlevel% equ 0 (
+  echo       Backend already running - reusing it
+) else (
+  powershell -NoProfile -Command "$p = Start-Process -FilePath '.venv\Scripts\pythonw.exe' -ArgumentList 'backend\main.py' -WindowStyle Hidden -PassThru; Set-Content -Path 'backend.pid' -Value $p.Id"
+)
 
 REM ---- 3. Wait for backend ready ----
 echo [2/3] Waiting for backend...
@@ -56,8 +61,12 @@ echo Tips: Ctrl+Alt+G toggle show/hide  -  Ctrl+Shift+I DevTools
 echo ================================================
 npx electron .
 
-REM ---- 5. Cleanup backend after Electron exits ----
+REM ---- 5. Cleanup backend after Electron exits (kill whole PID tree) ----
 echo.
 echo Cleaning backend process...
-taskkill /FI "WindowTitle eq AI-Girlfriend-Backend" /T /F >nul 2>&1
+if not exist backend.pid goto cleanup_done
+set /p BPID=<backend.pid
+taskkill /PID %BPID% /T /F >nul 2>&1
+del backend.pid >nul 2>&1
+:cleanup_done
 echo Exited.
