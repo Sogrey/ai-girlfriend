@@ -103,8 +103,42 @@ function getPrimarySize() {
   return { width: d.bounds.width, height: d.bounds.height };
 }
 
+// Clamp a dragged-away full-screen window so a usable slice always stays
+// on screen (at least MIN_VISIBLE px wide & tall), then apply.
+const MIN_VISIBLE = 300;
+function clampWindowPos(x, y, w, h) {
+  const d = screen.getPrimaryDisplay().bounds;
+  const minX = -(w - MIN_VISIBLE);
+  const maxX = d.width - MIN_VISIBLE;
+  const minY = -(h - MIN_VISIBLE);
+  const maxY = d.height - MIN_VISIBLE;
+  return {
+    x: Math.round(Math.max(minX, Math.min(maxX, x))),
+    y: Math.round(Math.max(minY, Math.min(maxY, y))),
+  };
+}
+
+// Apply a remembered (or default) window position with clamping.
+function applyWindowPos(x, y) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const b = mainWindow.getBounds();
+  const pos = clampWindowPos(x, y, b.width, b.height);
+  mainWindow.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
+}
+
 function createMainWindow(cfg) {
   const sz = getPrimarySize();
+  // restore the last dragged position (persisted by the renderer), or (0,0).
+  // NOTE: we always CREATE the window at (0,0) and reposition afterwards.
+  // Windows inflates a full-screen frameless window when it is created at a
+  // non-zero position (observed: width = screen.width + x + y), which shifted
+  // the avatar's projected geometry; creating at the origin then setBounds()
+  // keeps the size exact.
+  let initX = 0, initY = 0;
+  if (Number.isFinite(cfg.window?.x) && Number.isFinite(cfg.window?.y)) {
+    const pos = clampWindowPos(cfg.window.x, cfg.window.y, sz.width, sz.height);
+    initX = pos.x; initY = pos.y;
+  }
   mainWindow = new BrowserWindow({
     x: 0, y: 0,
     width: sz.width, height: sz.height,
@@ -130,6 +164,11 @@ function createMainWindow(cfg) {
   });
   // Highest level so she floats above fullscreen games / other topmost apps.
   try { mainWindow.setAlwaysOnTop(true, 'screen-saver'); } catch {}
+  // Move to the remembered position now that the window exists with the
+  // correct full-screen size (see NOTE above about creation-time inflation).
+  if (initX !== 0 || initY !== 0) {
+    mainWindow.setBounds({ x: initX, y: initY, width: sz.width, height: sz.height });
+  }
   mainWindow.setIgnoreMouseEvents(true, { forward: true });
   // Links in chat bubbles (target=_blank) open in the user's default
   // browser instead of trying to spawn an Electron child window.
@@ -179,7 +218,17 @@ function startMousePolling() {
   mouseTimer = setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
     const p = screen.getCursorScreenPoint();
-    mainWindow.webContents.send('global-mouse', { x: p.x, y: p.y });
+    // b = window position on screen. The renderer needs BOTH:
+    //  - global x/y: drag deltas (move the window)
+    //  - local lx/ly: proximity/hit tests — the character lives in window
+    //    coordinates, so after the window is dragged away from (0,0) the
+    //    global cursor no longer matches, and "near" silently broke
+    //    (toolbar never appeared, character undraggable). That was the bug.
+    const b = mainWindow.getBounds();
+    mainWindow.webContents.send('global-mouse', {
+      x: p.x, y: p.y,
+      lx: p.x - b.x, ly: p.y - b.y,
+    });
   }, 33);
 }
 function stopMousePolling() {
@@ -223,6 +272,7 @@ function buildTray(cfg) {
     { label: '唤醒', click: () => setHeartMode(false) },
     { label: '隐藏', click: () => { if (mainWindow && mainWindow.isVisible()) mainWindow.hide(); } },
     { type: 'separator' },
+    { label: '位置复位', click: () => { applyWindowPos(0, 0); } },
     { label: '换装', submenu: costumeSub },
     { label: '休息', click: () => sendToMain('tray:action', { action: 'leave' }) },
     { type: 'separator' },
@@ -270,7 +320,13 @@ function setupIpc() {
   ipcMain.handle('window:info', () => {
     const sz = getPrimarySize();
     const b = mainWindow ? mainWindow.getBounds() : { x: 0, y: 0, width: sz.width, height: sz.height };
-    return { bounds: b, screen: sz };
+    const wa = screen.getPrimaryDisplay().workArea; // excludes the taskbar
+    return { bounds: b, screen: sz, workArea: wa };
+  });
+  // restore / reset the remembered window position
+  ipcMain.on('window:applyPos', (_e, x, y) => {
+    if (!mainWindow || mainWindow.isDestroyed() || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    applyWindowPos(x, y);
   });
   ipcMain.on('window:show', () => {
     // renderer says model + textures are ready → reveal the window
@@ -280,7 +336,9 @@ function setupIpc() {
   ipcMain.on('window:moveBy', (_e, dx, dy) => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const b = mainWindow.getBounds();
-    mainWindow.setBounds({ x: Math.round(b.x + dx), y: Math.round(b.y + dy), width: b.width, height: b.height });
+    // clamp so a runaway drag can never strand the character off-screen
+    const pos = clampWindowPos(b.x + dx, b.y + dy, b.width, b.height);
+    mainWindow.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
   });
   ipcMain.on('window:setIgnoreMouse', (_e, ignore) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setIgnoreMouseEvents(!!ignore, { forward: true });

@@ -134,6 +134,8 @@ class BackendServer:
         elif mtype == 'clear_history':
             self.conv.clear()
             await self.send(ws, {'type': 'history_cleared', '_id': mid})
+        elif mtype == 'get_history':
+            await self.send(ws, {'type': 'history', 'items': self.conv.get_recent_history(30), '_id': mid})
         elif mtype == 'user_message':
             await self.handle_chat(ws, msg.get('text', ''), mid)
         elif mtype == 'transcribe_audio':

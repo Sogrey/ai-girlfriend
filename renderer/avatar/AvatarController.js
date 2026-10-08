@@ -19,7 +19,20 @@ export class AvatarController {
     this._currentOpacity = 1;
     this._gazeTarget = new THREE.Object3D();
     this._gazeTarget.position.set(0, 1.0, 4);
+    this._taskbarH = 48; // default; replaced by the real workArea delta below
     sceneManager.scene.add(this._gazeTarget);
+    // Measure the real taskbar height (bounds - workArea) from the main
+    // process so her feet can rest exactly on its top edge.
+    try {
+      window.desktop?.getWindowInfo?.().then((info) => {
+        const wa = info && info.workArea;
+        const sc = info && info.screen;
+        if (wa && sc && wa.height && sc.height) {
+          const tb = sc.height - (wa.y + wa.height);
+          if (tb >= 0 && tb < 200) this._taskbarH = tb;
+        }
+      }).catch(() => {});
+    } catch {}
   }
 
   get bones() { return this._bones; }
@@ -35,34 +48,27 @@ export class AvatarController {
       disposeVRM(this.vrm);
     }
     this.vrm = vrm;
-    // Character placement: horizontally centered over the toolbar,
-    // standing right above it (feet rest slightly above the toolbar top).
+    // Character placement: standing at the bottom-right of the window with
+    // her feet at the taskbar's top edge (minus a small gap). The toolbar now
+    // floats ABOVE her head, so placement no longer depends on it.
     // These are world-space offsets applied to the scene root; animation
     // (AnimationController) adds on top of this base each frame.
     //
-    // Toolbar CSS (main.css .toolbar): bottom:20px; right:60px;
-    // width 256px = 5×40btn + 4×8gap + 2×12pad; height 56px = 40btn + 2×8pad.
-    //
     // Camera: z=5.5, FOV 45° → half-view at the z=0 plane:
     //   tan(22.5°) × 5.5 ≈ 2.278m (vertical); horizontal scales by aspect.
-    // Window is a fixed full-screen overlay, so innerWidth/Height are stable.
     const halfView = Math.tan(THREE.MathUtils.degToRad(45 / 2)) * 5.5;
     const vw = window.innerWidth, vh = window.innerHeight;
-    const TOOLBAR = { right: 60, bottom: 20, halfW: 128, h: 56 };
-    const FOOT_GAP = 24; // px gap between her feet and the toolbar top
-    // Some VRM assets (e.g. the three-vrm sample model) have their origin at
-    // the hips/mid-body rather than the feet. Measure the real lowest point
-    // so her feet — not her origin — land above the toolbar.
+    // horizontal: same spot as the old toolbar center (bottom-right area)
+    const tbCenterX = vw - 60 - 128; // legacy toolbar center x, kept for continuity
+    this._basePosX = ((tbCenterX - vw / 2) / (vw / 2)) * (halfView * (vw / vh));
+    // vertical: feet rest just above the Windows taskbar
+    const taskbarH = Number.isFinite(this._taskbarH) ? this._taskbarH : 48;
+    const footPxY = vh - taskbarH - 6; // 6px breathing room above the taskbar
+    const pxPerM = vh / (2 * halfView);
+    // Some VRM assets have their origin at the hips rather than the feet -
+    // measure the real lowest point so her FEET land at the taskbar edge.
     const box = new THREE.Box3().setFromObject(vrm.scene);
     const feetOffsetY = Number.isFinite(box.min.y) ? box.min.y : 0;
-    // Horizontal: world x so the character center aligns with toolbar center.
-    // fov is vertical → horizontal half-view = halfView × aspect.
-    const aspect = vw / vh;
-    const tbCenterX = vw - TOOLBAR.right - TOOLBAR.halfW;
-    this._basePosX = ((tbCenterX - vw / 2) / (vw / 2)) * halfView * aspect;
-    // Vertical: world y so her feet land just above the toolbar top.
-    const footPxY = vh - TOOLBAR.bottom - TOOLBAR.h - FOOT_GAP;
-    const pxPerM = vh / (2 * halfView);
     this._basePosY = 0.76 - (footPxY - vh / 2) / pxPerM - feetOffsetY;
     this.vrm.scene.position.set(this._basePosX, this._basePosY, 0);
     this.vrm.scene.rotation.set(0, 0, 0);

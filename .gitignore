@@ -7,3 +7,4 @@ config/user.json
 dist/
 npm-debug.log*
 backend.pid
+config/history.jsonl

@@ -12,7 +12,8 @@ export class MouseInteractionController {
     this.avatar = avatar;
     this.canvas = sm.canvas;
     this.raycaster = new THREE.Raycaster();
-    this.mouseGlobal = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    this.mouseGlobal = { x: window.innerWidth / 2, y: window.innerHeight / 2 }; // screen coords (drag deltas)
+    this.mouseLocal = { x: window.innerWidth / 2, y: window.innerHeight / 2 };  // window-relative (proximity/hit)
     this._ignore = true;
     this._pressing = false;
     this._dragging = false;
@@ -25,7 +26,18 @@ export class MouseInteractionController {
     this._dragStartGlobal = null;
     this._dragWindowStart = null; // {x, y} window position at drag start
 
-    window.desktop?.onGlobalMouse?.((pos) => { this.mouseGlobal = pos; });
+    window.desktop?.onGlobalMouse?.((pos) => {
+      this.mouseGlobal = { x: pos.x, y: pos.y };
+      // lx/ly = cursor in WINDOW coordinates (main subtracts the window
+      // offset). The character's projection is also window-relative, so
+      // proximity only works with these after the window has been dragged.
+      if (Number.isFinite(pos.lx) && Number.isFinite(pos.ly)) {
+        this.mouseLocal = { x: pos.lx, y: pos.ly };
+      } else {
+        // older main process: window assumed at (0,0)
+        this.mouseLocal = { x: pos.x, y: pos.y };
+      }
+    });
     this._bind();
     this._emitter = bus;
   }
@@ -42,13 +54,26 @@ export class MouseInteractionController {
     if (!this.avatar.hasModel()) return;
     const head = this.sm.worldToScreen(this.avatar.headWorldPos());
     const chest = this.sm.worldToScreen(this.avatar.chestWorldPos());
-    const dHead = Math.hypot(this.mouseGlobal.x - head.x, this.mouseGlobal.y - head.y);
-    const dChest = Math.hypot(this.mouseGlobal.x - chest.x, this.mouseGlobal.y - chest.y);
-    // near = cursor close to the avatar, OR hovering the UI widgets.
-    // Without the UI check, moving the cursor from the avatar down to the
-    // toolbar leaves the "near" zone, which fades the toolbar out and
-    // re-enables click-through before the buttons can be clicked.
-    const near = dHead < this._prox
+    // proximity must use WINDOW-LOCAL cursor coords: the projected head/
+    // chest live in window space, and after dragging the window away from
+    // the screen origin the global cursor no longer matches (that silently
+    // disabled the toolbar & dragging - the bug where she got "stuck").
+    const m = this.mouseLocal;
+    const dHead = Math.hypot(m.x - head.x, m.y - head.y);
+    const dChest = Math.hypot(m.x - chest.x, m.y - chest.y);
+    // near = cursor over the character's WHOLE body (a generous box spanning
+    // from above her head to below her feet), OR hovering the UI widgets.
+    // The old two-circle test (head 160px / chest 152px) ignored her lower
+    // body: hovering the legs did not summon the toolbar or disable
+    // click-through, which made her feel "sometimes undraggable".
+    const vh = window.innerHeight;
+    const bodyLeft = chest.x - 170;
+    const bodyRight = chest.x + 170;
+    const bodyTop = head.y - 90;
+    const bodyBottom = vh - 10; // slightly past her feet / window bottom
+    const inBodyBox = m.x >= bodyLeft && m.x <= bodyRight && m.y >= bodyTop && m.y <= bodyBottom;
+    const near = inBodyBox
+      || dHead < this._prox
       || dChest < this._prox * 0.95
       || this._uiHover();
 
@@ -65,15 +90,16 @@ export class MouseInteractionController {
   // - open panels count only while visible, so clicks on chat/settings/
   //   costume widgets never fall through to the desktop
   _uiHover() {
+    const m = this.mouseLocal;
     for (const id of ['toolbar', 'chat-panel', 'settings-panel', 'costume-bar']) {
       const el = document.getElementById(id);
       if (!el) continue;
       const visible = !el.classList.contains('hidden');
       if (id !== 'toolbar' && !visible) continue;
       const r = el.getBoundingClientRect();
-      const m = 20; // px buffer around the element
-      if (this.mouseGlobal.x >= r.left - m && this.mouseGlobal.x <= r.right + m &&
-          this.mouseGlobal.y >= r.top - m && this.mouseGlobal.y <= r.bottom + m) {
+      const margin = 20; // px buffer around the element
+      if (m.x >= r.left - margin && m.x <= r.right + margin &&
+          m.y >= r.top - margin && m.y <= r.bottom + margin) {
         return true;
       }
     }
@@ -157,6 +183,17 @@ export class MouseInteractionController {
       this._lastDragDx = 0;
       this._lastDragDy = 0;
       this._dragStartGlobal = null;
+      // persist the new window position so the next launch restores it
+      // (main clamps; renderer just reports where it ended up)
+      try {
+        window.desktop?.getWindowInfo?.().then((info) => {
+          const b = info && info.bounds;
+          if (b) {
+            // clamp in the main process's return already applied via moveBy
+            window.desktop?.updateConfig?.({ window: { x: b.x, y: b.y } });
+          }
+        }).catch(() => {});
+      } catch {}
       return; // pure drag, no click action
     }
     if (totalDist < 6 && dur < 650) {

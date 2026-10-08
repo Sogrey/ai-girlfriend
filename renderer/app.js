@@ -16,7 +16,7 @@ import { VoiceController } from './interaction/VoiceController.js';
 import { ActionDispatcher } from './actions/ActionDispatcher.js';
 import { initToast, show } from './ui/Toast.js';
 import { initToolbar } from './ui/Toolbar.js';
-import { initChatPanel, toggle as toggleChat, addAI as addAIBubble } from './ui/ChatPanel.js';
+import { initChatPanel, toggle as toggleChat, addAI as addAIBubble, addUser as addChatUser } from './ui/ChatPanel.js';
 import { initSettingsPanel, toggle as toggleSettings } from './ui/SettingsPanel.js';
 
 async function boot() {
@@ -74,7 +74,19 @@ async function boot() {
     if (tts && typeof tts.volume === 'number') lipsync.setVolume(tts.volume);
   });
 
-  bus.on('backend:connected', () => show('后端已连接', 'ok', 1500));
+  bus.on('backend:connected', () => {
+    show('后端已连接', 'ok', 1500);
+    // replay recent chat history so she "remembers" previous talks
+    backend.request({ type: 'get_history' }).then((msg) => {
+      const items = msg && msg.items;
+      if (Array.isArray(items) && items.length) {
+        for (const it of items) {
+          if (it.role === 'user') addChatUser(it.content, 'me');
+          else if (it.role === 'assistant') addAIBubble(it.content, null);
+        }
+      }
+    }).catch(() => {});
+  });
   bus.on('backend:ai_response', (msg) => {
     dispatcher.applyEmotion(msg.emotion);
     if (msg.action && msg.action !== 'idle') dispatcher.run(msg.action, { costume: msg.costume });
@@ -122,6 +134,7 @@ async function boot() {
   }
 
   // ---- main loop ----
+  let uiVarsT = 0;
   sm.onFrame((dt) => {
     const gaze = eye.update(dt);
     animation.update(dt, gaze);
@@ -131,6 +144,20 @@ async function boot() {
     mouse.update();
     avatar.update(dt);   // sync normalized bones -> raw bones, springbones, expressions
     avatar.tickOpacity(dt);
+
+    // Anchor the toolbar/panels above her head: refresh the CSS vars that
+    // position them (throttled - they only change on drag/resize anyway).
+    uiVarsT += dt;
+    if (uiVarsT > 0.25 && avatar.hasModel()) {
+      uiVarsT = 0;
+      try {
+        const head = sm.worldToScreen(avatar.headWorldPos());
+        const foot = sm.worldToScreen(avatar.chestWorldPos());
+        const root = document.documentElement.style;
+        root.setProperty('--av-head-y', `${Math.round(head.y)}px`);
+        root.setProperty('--av-x', `${Math.round((head.x + foot.x) / 2)}px`);
+      } catch {}
+    }
   });
   sm.start();
 

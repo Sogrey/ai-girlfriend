@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('desktop', {
   // window
   moveWindowBy: (dx, dy) => ipcRenderer.send('window:moveBy', dx, dy),
   setIgnoreMouse: (ignore) => ipcRenderer.send('window:setIgnoreMouse', !!ignore),
+  applyWindowPos: (x, y) => ipcRenderer.send('window:applyPos', x, y),
   getWindowInfo: () => ipcRenderer.invoke('window:info'),
   showWindow: () => ipcRenderer.send('window:show'),
   // lifecycle
