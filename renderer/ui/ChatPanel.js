@@ -98,9 +98,11 @@ export function addUser(text, who = 'me') {
 }
 
 export function addAI(text, emotion, opts = {}) {
+  // last line of defense: never render a blank bubble
+  const shown = (text == null ? '' : String(text)).trim() || '……';
   const el = document.createElement('div');
   el.className = 'chat-msg ai md' + (opts.error ? ' error' : '');
-  el.innerHTML = renderRich(text); // escaped-then-assembled, XSS-safe
+  el.innerHTML = renderRich(shown); // escaped-then-assembled, XSS-safe
   if (emotion) el.dataset.emotion = emotion;
   logEl.appendChild(el);
   scrollDown();

@@ -22,8 +22,12 @@ class LLMManager:
             raise ValueError(f'未知的 LLM provider: {name}（支持 deepseek / ollama）')
         self.provider_name = name
 
-    async def chat(self, messages, system_prompt):
-        return await self.provider.chat(messages, system_prompt)
+    async def chat(self, messages, system_prompt, use_json_format=True):
+        try:
+            return await self.provider.chat(messages, system_prompt, use_json_format=use_json_format)
+        except TypeError:
+            # provider doesn't support the flag (e.g. ollama) - plain call
+            return await self.provider.chat(messages, system_prompt)
 
     async def chat_stream(self, messages, system_prompt, on_delta=None):
         """Streamed chat; providers without streaming fall back to chat()."""
