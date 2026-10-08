@@ -64,6 +64,7 @@ function save() {
   saveConfig(patch).then(() => {
     window.desktop.setLaunchAtStartup(patch.window.launch_at_startup);
     bus.emit('backend:send', { type: 'reload_config' });
+    bus.emit('settings:saved', patch); // let app.js apply live (TTS volume etc.)
     bus.emit('toast:show', { text: '设置已保存', kind: 'ok', ms: 1800 });
     toggle(false);
   }).catch((e) => {

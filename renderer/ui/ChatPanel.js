@@ -12,7 +12,7 @@ export function initChatPanel({ backend }) {
   sendEl.addEventListener('click', send);
   inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
 
-  bus.on('backend:ai_response', (msg) => { removeThinking(); addAI(msg.reply, msg.emotion); });
+  bus.on('backend:ai_response', (msg) => { finalizeStream(msg.reply, msg.emotion); });
   bus.on('backend:llm_partial', (msg) => showStreaming(msg.text));
   bus.on('backend:stt_result', (msg) => addUser(msg.text, 'voice'));
   bus.on('backend:error', () => removeThinking());
@@ -30,6 +30,25 @@ function removeThinking() {
   const dots = logEl.querySelector('.typing');
   if (dots) dots.remove();
   streamEl = null;
+}
+
+// The streamed bubble IS the reply bubble: on ai_response, finalize it in
+// place (definitive content, caret removed). Prevents the duplicate-bubble
+// bug where the final reply was APPENDED next to the still-caret-ed one.
+function finalizeStream(text, emotion) {
+  const shown = (text == null ? '' : String(text)).trim() || '……';
+  if (streamEl && streamEl.parentNode) {
+    streamEl.innerHTML = renderRich(shown);
+    if (emotion) streamEl.dataset.emotion = emotion;
+    streamEl = null;
+  } else {
+    // no stream bubble existed (e.g. no-key error path) - add fresh
+    removeThinking();
+    addAI(shown, emotion);
+  }
+  const dots = logEl.querySelector('.typing');
+  if (dots) dots.remove();
+  scrollDown();
 }
 
 function showStreaming(partialRaw) {

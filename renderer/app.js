@@ -33,6 +33,7 @@ async function boot() {
   const emotion = new EmotionController(avatar);
   const eye = new EyeTrackingController(avatar, sm);
   const lipsync = new LipSyncController(avatar, { volume: c.tts.volume || 0.9 });
+  window.__lipsync = lipsync; // debug/verification hook (gain readable in tests)
   const particles = new ParticleSystem(sm);
   const mouse = new MouseInteractionController(sm, avatar);
 
@@ -66,6 +67,12 @@ async function boot() {
   bus.on('action:request', ({ action, payload }) => dispatcher.run(action, payload || {}));
   bus.on('backend:send_user', ({ text }) => backend.send({ type: 'user_message', text }));
   bus.on('backend:send', (msg) => backend.send(msg));
+
+  // settings saved in the panel -> apply TTS playback volume immediately
+  // (previously the value was only read once at boot, so the slider did nothing)
+  bus.on('settings:saved', ({ tts }) => {
+    if (tts && typeof tts.volume === 'number') lipsync.setVolume(tts.volume);
+  });
 
   bus.on('backend:connected', () => show('后端已连接', 'ok', 1500));
   bus.on('backend:ai_response', (msg) => {
