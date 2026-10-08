@@ -147,7 +147,13 @@ class BackendServer:
         if not text.strip():
             return
         try:
-            result = await self.conv.chat(text, source='text')
+            # stream_partial: push raw partial text to the UI so the user
+            # sees a typewriter effect instead of a blank wait.
+            async def push_partial(partial):
+                await self.send(ws, {'type': 'llm_partial', 'text': partial})
+            def on_delta(partial):
+                asyncio.ensure_future(push_partial(partial))
+            result = await self.conv.chat_stream(text, source='text', on_delta=on_delta)
         except Exception as e:
             logger.error('LLM error: %s', e)
             await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
@@ -179,7 +185,11 @@ class BackendServer:
         await self.send(ws, {'type': 'stt_result', 'text': text, '_id': mid})
         if text.strip():
             try:
-                result = await self.conv.chat(text, source='voice')
+                async def push_partial(partial):
+                    await self.send(ws, {'type': 'llm_partial', 'text': partial})
+                def on_delta(partial):
+                    asyncio.ensure_future(push_partial(partial))
+                result = await self.conv.chat_stream(text, source='voice', on_delta=on_delta)
             except Exception as e:
                 logger.error('LLM error: %s', e)
                 await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})

@@ -40,3 +40,18 @@ class ConversationManager:
                     source, result['emotion'], result['action'], result['costume'], result['reply'][:60])
         self.history.append({'role': 'assistant', 'content': result['reply']})
         return result
+
+    async def chat_stream(self, user_text, source='text', on_delta=None):
+        """Streaming chat: on_delta(partial_raw) fires as raw chunks arrive.
+        The raw text is JSON (system prompt) so the UI shows it typewriter-
+        style; the final parse below produces the structured result."""
+        self.history.append({'role': 'user', 'content': user_text})
+        if len(self.history) > self.max_history * 2:
+            self.history = self.history[-self.max_history:]
+        raw = await self.llm.chat_stream(self.history, self.system_prompt, on_delta)
+        data = extract_json(raw)
+        result = validate(data, raw)
+        logger.info('LLM-stream(%s) -> emotion=%s action=%s costume=%s reply=%r',
+                    source, result['emotion'], result['action'], result['costume'], result['reply'][:60])
+        self.history.append({'role': 'assistant', 'content': result['reply']})
+        return result

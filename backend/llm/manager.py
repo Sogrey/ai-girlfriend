@@ -25,6 +25,10 @@ class LLMManager:
     async def chat(self, messages, system_prompt):
         return await self.provider.chat(messages, system_prompt)
 
+    async def chat_stream(self, messages, system_prompt, on_delta=None):
+        """Streamed chat; providers without streaming fall back to chat()."""
+        return await self.provider.chat_stream(messages, system_prompt, on_delta)
+
     async def health_check(self):
         try:
             return await self.provider.health_check()

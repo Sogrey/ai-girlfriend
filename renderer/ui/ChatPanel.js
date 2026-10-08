@@ -12,12 +12,64 @@ export function initChatPanel({ backend }) {
   sendEl.addEventListener('click', send);
   inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
 
-  bus.on('backend:ai_response', (msg) => addAI(msg.reply, msg.emotion));
+  bus.on('backend:ai_response', (msg) => { removeThinking(); addAI(msg.reply, msg.emotion); });
+  bus.on('backend:llm_partial', (msg) => showStreaming(msg.text));
   bus.on('backend:stt_result', (msg) => addUser(msg.text, 'voice'));
+  bus.on('backend:error', () => removeThinking());
   bus.on('backend:tts_audio', () => {
+    // first TTS chunk arrived -> the reply is complete; stop the stream view
     const dots = logEl.querySelector('.typing');
     if (dots) dots.remove();
   });
+}
+
+// ---- live reply bubble (thinking -> typewriter streaming) ----
+let streamEl = null;
+
+function removeThinking() {
+  const dots = logEl.querySelector('.typing');
+  if (dots) dots.remove();
+  streamEl = null;
+}
+
+function showStreaming(partialRaw) {
+  // The backend streams the RAW LLM output (JSON per system prompt).
+  // Extract the reply string so far for a readable typewriter effect;
+  // fall back to the raw prefix until the key appears.
+  let shown = extractPartialReply(partialRaw);
+  if (shown == null) {
+    // JSON key not arrived yet - keep (or create) the 'thinking' dots
+    ensureThinkingBubble();
+    return;
+  }
+  if (!streamEl || !streamEl.parentNode) {
+    removeThinking();
+    streamEl = document.createElement('div');
+    streamEl.className = 'chat-msg ai md';
+    logEl.appendChild(streamEl);
+  }
+  streamEl.innerHTML = renderRich(shown) + '<span class="caret"></span>';
+  scrollDown();
+}
+
+function ensureThinkingBubble() {
+  if (logEl.querySelector('.typing')) return;
+  const el = document.createElement('div');
+  el.className = 'chat-msg ai typing';
+  el.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  logEl.appendChild(el);
+  scrollDown();
+}
+
+// Pull a best-effort partial reply from streamed raw JSON.
+// Returns null while 'reply' value hasn't started arriving yet.
+function extractPartialReply(raw) {
+  const m = raw.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  if (!m || !m[1]) return null;
+  let s = m[1];
+  // unescape common JSON escapes progressively (partial-safe)
+  s = s.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\').replace(/\\t/g, '\t');
+  return s;
 }
 
 function send() {
@@ -25,6 +77,7 @@ function send() {
   if (!text) return;
   inputEl.value = '';
   addUser(text, 'me');
+  ensureThinkingBubble(); // immediate feedback while LLM is thinking
   bus.emit('backend:send_user', { text });
 }
 

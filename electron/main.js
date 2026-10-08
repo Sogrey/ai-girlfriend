@@ -49,15 +49,19 @@ let configCache = null;
 let bootShowTimer = null; // safety net: force-show window if boot stalls
 
 // ---------- config helpers ----------
+// tolerant JSON reader: strips UTF-8 BOM (PowerShell writes add one and
+// JSON.parse barfs on it, silently killing the whole base config)
+function readJsonSafe(p) {
+  try {
+    let s = fs.readFileSync(p, 'utf8');
+    if (s.charCodeAt(0) === 0xFEFF) s = s.slice(1); // BOM
+    return JSON.parse(s);
+  } catch { return {}; }
+}
+
 function loadConfig() {
-  let base = {};
-  let user = {};
-  try {
-    base = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  } catch {}
-  try {
-    user = JSON.parse(fs.readFileSync(USER_CONFIG_PATH, 'utf8'));
-  } catch {}
+  const base = readJsonSafe(CONFIG_PATH);
+  const user = readJsonSafe(USER_CONFIG_PATH);
   const merged = deepMerge(structuredClone(base), user);
   configCache = merged;
   return merged;
@@ -75,9 +79,9 @@ function deepMerge(base, over) {
 }
 
 function saveUserConfig(patch) {
-  let user = {};
-  try { user = JSON.parse(fs.readFileSync(USER_CONFIG_PATH, 'utf8') || '{}'); } catch {}
+  let user = readJsonSafe(USER_CONFIG_PATH);
   deepMerge(user, patch);
+  // write WITHOUT BOM (utf8 string, no BOM prefix) so JSON.parse elsewhere stays happy
   fs.writeFileSync(USER_CONFIG_PATH, JSON.stringify(user, null, 2), 'utf8');
   return loadConfig();
 }
