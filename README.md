@@ -134,7 +134,7 @@ ollama serve
 | 长按头部 | 同上（与拖拽互斥） |
 | 按住角色拖动 | 移动窗口位置 |
 | 🎤 按钮 | 开始/停止语音对话（VAD 自动断句） |
-| 💬 按钮 | 文字聊天 |
+| 💬 按钮 | 文字聊天（她的回复支持 **加粗**、`代码` 与可点击链接，链接在系统默认浏览器打开） |
 | 👗 按钮 | 手动换装（5 套） |
 | 👋 按钮 | 让她去休息 |
 | ⚙️ 按钮 | 设置面板 |
@@ -256,7 +256,7 @@ ai-girlfriend/
 <details>
 <summary><b>AI 对话报"API Key 未设置"</b></summary>
 
-这是唯一的必做配置。设置面板 → AI 大模型 → 填写 DeepSeek API Key → 保存。在 [platform.deepseek.com](https://platform.deepseek.com) 免费注册获取。
+这是唯一的必做配置。提问后此提示会以她的红色气泡显示在聊天面板中，**气泡里的链接可直接点击**跳转浏览器。设置面板 → AI 大模型 → 填写 DeepSeek API Key → 保存。在 [platform.deepseek.com](https://platform.deepseek.com) 免费注册获取。
 </details>
 
 <details>
@@ -346,3 +346,5 @@ npm config set registry https://registry.npmmirror.com
 ## License
 
 Private / Personal Use
+
+> AI生成

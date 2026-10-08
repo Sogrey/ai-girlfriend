@@ -244,8 +244,8 @@ table.table tbody tr:hover { background: #e8f0fe; }
       <div class="meta-item"><span class="value">85%</span><span class="label">整体完成度（含待确认项）</span></div>
       <div class="meta-item"><span class="value">77 / 96</span><span class="label">功能需求已验证</span></div>
       <div class="meta-item"><span class="value">14</span><span class="label">待开发需求</span></div>
-      <div class="meta-item"><span class="value">12</span><span class="label">累计修复缺陷</span></div>
-      <div class="meta-item"><span class="value">v1.0.1</span><span class="label">当前基线</span></div>
+      <div class="meta-item"><span class="value">16</span><span class="label">累计修复缺陷</span></div>
+      <div class="meta-item"><span class="value">v1.0.2</span><span class="label">当前基线</span></div>
     </div>
   </section>
 
@@ -308,8 +308,12 @@ table.table tbody tr:hover { background: #e8f0fe; }
       <p>角色渲染 + 全部交互链路 + 语音对话。核心链路端到端验证通过（STT 实测识别、TTS 实测合成、渲染 alpha 验证）。</p>
     </li>
     <li class="done">
-      <strong>M1.05 — v1.0.1 UI 打磨包（已完成 · 当前基线）</strong>
+      <strong>M1.05 — v1.0.1 UI 打磨包（已完成）</strong>
       <p>人物站位对齐功能栏、打招呼手势重做、工具栏 hover 死区修复、首启/唤醒纹理时序保护，5 项全部像素级 / CDP 自动化实测验证。</p>
+    </li>
+    <li class="done">
+      <strong>M1.07 — v1.0.2 对话与图标打磨（已完成 · 当前基线）</strong>
+      <p>AI 气泡 Markdown 渲染 + 链接点击跳浏览器、LLM 错误改气泡显示 + Toast 超宽裁剪修复、应用图标满幅重制、单实例锁 + BAT 后端泄漏根治。11/11 单元断言 + CDP 端到端实测。</p>
     </li>
     <li>
       <strong>M1.1 — v1.1 打磨包（规划中 · 建议 1–2 天）</strong>
@@ -326,7 +330,7 @@ table.table tbody tr:hover { background: #e8f0fe; }
   </ol>
 
   <!-- ===== Phase 1-16 已完成清单 ===== -->
-  <h1 class="heading">四、已完成开发内容（Phase 1–17）</h1>
+  <h1 class="heading">四、已完成开发内容（Phase 1–18）</h1>
   <ul class="task-list">
     <li><span class="status-pill success">Phase 1</span> <strong>项目骨架</strong> — 模块化目录 / package.json（electron 34.5.8 + three 0.174 + three-vrm 3.5.5）/ npmrc 镜像 / config.json 全量配置 / system_prompt.txt 人格文件 / venv + requirements 依赖锁定</li>
     <li><span class="status-pill success">Phase 2</span> <strong>Electron 基座</strong> — 窗口生命周期 / 托盘 / 快捷键 / IPC / 麦克风权限 / preload 安全桥 15 方法 / app:// 自定义协议（fetch + importmap + VRM 二进制 + no-store）</li>
@@ -343,6 +347,7 @@ table.table tbody tr:hover { background: #e8f0fe; }
     <li><span class="status-pill success">Phase 15</span> <strong>启动链路</strong> — 一键 BAT（依赖检查 → 后端启动 → TCP 就绪探测 40×1s → Electron → 退出清理）/ check-deps postinstall / 官方示例 VRM 模型下载 / 托盘图标</li>
     <li><span class="status-pill success">Phase 16</span> <strong>集成测试与修复</strong> — 全链路联测，定位并修复 7 个真实缺陷（详见 4.1）</li>
     <li><span class="status-pill success">Phase 17</span> <strong>UI 打磨与加载时序修复（v1.0.1）</strong> — 人物站位动态对齐工具栏（Box3 脚底补偿，像素差 ~1px）/ 打招呼手势重做（举至头侧、掌心朝观众）/ 工具栏 hover 死区修复 + 260ms 防抖 / 首启延迟显示（show:false + window:show IPC + 15s 兑底）/ 唤醒纹理保护（canvas 隐藏 700ms + Chromium 三开关）</li>
+    <li><span class="status-pill success">Phase 18</span> <strong>对话 Markdown 与应用图标（v1.0.2）</strong> — AI 气泡零依赖安全渲染器（先转义后拼装：加粗/代码/链接/换行）+ 链接 shell.openExternal 跳系统浏览器 + 全角标点边界处理（11/11 单测）/ LLM 错误改气泡显示 + Toast 超宽裁剪根因修复 / 应用图标满幅重制（32px 占格 ~30%→~100%）/ 单实例锁 + BAT 后端 PID 树杀根治泄漏</li>
   </ul>
 
   <!-- ===== 缺陷修复记录 ===== -->
@@ -456,6 +461,11 @@ table.table tbody tr:hover { background: #e8f0fe; }
     <li><strong>10-02 02:40 · 首启延迟显示 ✅</strong><p>窗口首次可见从启动 ~1s 推迟到 3.5s（模型就绪后）；CDP 截图确认首帧纹理完整</p></li>
     <li><strong>10-02 03:00 · 唤醒烂帧复现 ❗</strong><p>leave→summon 流程脚本化重放：唤醒后 0–480ms 半透明虚影/无五官，640ms 起纹理才恢复 → 定位为隐藏窗口期间 GPU 纹理被回收</p></li>
     <li><strong>10-02 03:25 · 唤醒修复验证 ✅</strong><p>canvas 隐藏 700ms 方案重放同一流程：等待期完全空白，首次可见帧纹理完全正常，全程无虚影</p></li>
+    <li><strong>10-08 22:35 · LLM 错误气泡实测 ✅</strong><p>无 Key 提问：聊天面板自动打开、错误以红色 AI 气泡完整显示、顶部 toast 数量 0</p></li>
+    <li><strong>10-08 22:58 · 单实例/BAT 清理实测 ✅</strong><p>双开 Electron 数 5→5 不变；后端端口复用无新增；树杀验证 stub+真实监听者一并清理</p></li>
+    <li><strong>10-08 23:20 · Markdown 渲染单元测试 ✅</strong><p>11/11 断言全过：全角标点截断 / 引号包裹 URL 不吞转义实体 / 查询串保留 / md 链接不双链 / XSS 转义 / 生产 Key 错误场景</p></li>
+    <li><strong>10-08 23:25 · Markdown 端到端 ✅</strong><p>全新实例 CDP 实测：富文本气泡全渲染、裸链接全角逗号正确截断、链接可点击跳系统浏览器、真实无 Key 错误流程链接样式正常</p></li>
+    <li><strong>10-08 23:30 · 图标满幅复验 ✅</strong><p>裁剪 iconfont 素材内边距后内容占格 ~100%（原 ~30%），32px 满格清晰可辨</p></li>
   </ol>
 
   <!-- ===== 风险 ===== -->
