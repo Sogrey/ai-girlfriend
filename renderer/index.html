@@ -66,7 +66,12 @@
         <label data-for="deepseek">DeepSeek API Key
           <input id="set-deepseek-key" type="password" placeholder="sk-..." />
         </label>
-        <label data-for="deepseek">模型 <input id="set-deepseek-model" type="text" /></label>
+        <label data-for="deepseek">模型
+          <select id="set-deepseek-model">
+            <option value="deepseek-flash">deepseek-flash（推荐 · 快）</option>
+            <option value="deepseek-v4-pro">deepseek-v4-pro（更强）</option>
+          </select>
+        </label>
         <label data-for="ollama" class="ollama-only">Ollama 地址 <input id="set-ollama-url" type="text" /></label>
         <label data-for="ollama" class="ollama-only">Ollama 模型 <input id="set-ollama-model" type="text" /></label>
       </fieldset>

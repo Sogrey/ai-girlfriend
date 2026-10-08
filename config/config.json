@@ -1,4 +1,4 @@
-{
+﻿{
   "app": {
     "persona_name": "小满",
     "user_name": "主人",
@@ -9,7 +9,7 @@
     "deepseek": {
       "api_key": "",
       "base_url": "https://api.deepseek.com",
-      "model": "deepseek-chat",
+      "model": "deepseek-flash",
       "temperature": 0.8,
       "max_tokens": 512,
       "timeout_seconds": 60
