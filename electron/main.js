@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, Tray, Menu, globalShortcut, screen,
-  ipcMain, protocol, session, nativeImage,
+  ipcMain, protocol, session, nativeImage, shell,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -127,6 +127,12 @@ function createMainWindow(cfg) {
   // Highest level so she floats above fullscreen games / other topmost apps.
   try { mainWindow.setAlwaysOnTop(true, 'screen-saver'); } catch {}
   mainWindow.setIgnoreMouseEvents(true, { forward: true });
+  // Links in chat bubbles (target=_blank) open in the user's default
+  // browser instead of trying to spawn an Electron child window.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   mainWindow.loadURL('app://local/renderer/index.html');
   // forward renderer console to main stdout for debugging
   mainWindow.webContents.on('console-message', (_e, _level, message, line, sourceId) => {
