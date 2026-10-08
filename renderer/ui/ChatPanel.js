@@ -44,9 +44,9 @@ export function addUser(text, who = 'me') {
   scrollDown();
 }
 
-export function addAI(text, emotion) {
+export function addAI(text, emotion, opts = {}) {
   const el = document.createElement('div');
-  el.className = 'chat-msg ai';
+  el.className = 'chat-msg ai' + (opts.error ? ' error' : '');
   el.textContent = text;
   if (emotion) el.dataset.emotion = emotion;
   logEl.appendChild(el);

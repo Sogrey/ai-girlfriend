@@ -16,7 +16,7 @@ import { VoiceController } from './interaction/VoiceController.js';
 import { ActionDispatcher } from './actions/ActionDispatcher.js';
 import { initToast, show } from './ui/Toast.js';
 import { initToolbar } from './ui/Toolbar.js';
-import { initChatPanel, toggle as toggleChat } from './ui/ChatPanel.js';
+import { initChatPanel, toggle as toggleChat, addAI as addAIBubble } from './ui/ChatPanel.js';
 import { initSettingsPanel, toggle as toggleSettings } from './ui/SettingsPanel.js';
 
 async function boot() {
@@ -78,7 +78,15 @@ async function boot() {
   bus.on('backend:status', (msg) => {
     if (msg.stt_ready === false) show('语音识别引擎: ' + (msg.stt_error || '未就绪'), 'warn', 4000);
   });
-  bus.on('backend:error', (msg) => show(msg.message || '后端错误', 'error', 5000));
+  bus.on('backend:error', (msg) => {
+    // Show backend/LLM errors as her reply bubble inside the chat panel
+    // (auto-opens the panel if closed). The old top-right toast could be
+    // clipped off-screen for long messages containing URLs.
+    const text = msg.message || '后端错误';
+    const panel = document.getElementById('chat-panel');
+    if (panel && panel.classList.contains('hidden')) toggleChat();
+    addAIBubble(text, null, { error: true });
+  });
 
   backend.connect();
 
