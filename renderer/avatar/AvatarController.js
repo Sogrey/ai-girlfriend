@@ -190,6 +190,21 @@ export class AvatarController {
     return v;
   }
 
+  // Lowest foot world position - anchors bottom-side UI (vertical toolbar).
+  footWorldPos() {
+    const v = new THREE.Vector3();
+    const l = this._bones.leftFoot, r = this._bones.rightFoot;
+    const a = new THREE.Vector3(), b = new THREE.Vector3();
+    const hasL = !!l, hasR = !!r;
+    if (hasL) l.getWorldPosition(a);
+    if (hasR) r.getWorldPosition(b);
+    if (hasL && hasR) v.set((a.x + b.x) / 2, Math.min(a.y, b.y), (a.z + b.z) / 2);
+    else if (hasL) v.copy(a);
+    else if (hasR) v.copy(b);
+    else if (this.vrm) this.vrm.scene.getWorldPosition(v);
+    return v;
+  }
+
   update(dt) {
     if (this.vrm) {
       try { this.vrm.update(dt); } catch (e) { console.error('vrm.update error', e); }

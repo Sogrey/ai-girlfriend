@@ -44,21 +44,22 @@ html,body {
 .rec-indicator .dot { width:8px;height:8px;border-radius:50%;background:#ff4060;animation:pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
 
-/* ---------- Toolbar (floats above the character's head) ---------- */
-/* --av-head-fx: feet-bottom-x/y (window px) maintained by app.js main loop; */
-/* toolbar centers on the character, stacked above her head */
+/* ---------- Toolbar (vertical, pinned to her lower-right side) ---------- */
+/* --av-x: character center x, --av-feet-y: feet screen-y — both maintained */
+/* by the app.js main loop. Slim bar hugs her right side (≈10px visual gap), */
+/* bottom resting just above her feet; saves the headroom above her head. */
 .toolbar {
   position:fixed; z-index:40;
-  /* head screen-x minus half toolbar width */
-  left: calc(var(--av-x, 1370px) - 140px);
-  /* toolbar bottom = (window height - head y) + 14px gap */
-  bottom: calc((100vh - var(--av-head-y, 320px)) + 14px);
-  display:flex; gap:8px; padding:8px 12px; border-radius:24px;
+  /* hugging her right side; clamp so the slim bar stays inside the window */
+  left: min(calc(var(--av-x, 1370px) + 70px), calc(100vw - 52px));
+  /* bar bottom = feet y + 4px gap */
+  bottom: calc((100vh - var(--av-feet-y, 810px)) + 4px);
+  display:flex; flex-direction:column; gap:6px; padding:6px; border-radius:18px;
   background:rgba(30,25,38,.55); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.08);
   transition:opacity .35s ease;
 }
 .toolbar button {
-  width:40px;height:40px;border:none;border-radius:50%;cursor:pointer;font-size:18px;
+  width:32px;height:32px;border:none;border-radius:50%;cursor:pointer;font-size:14px;
   background:rgba(255,255,255,.08); color:#fff; transition:all .2s; display:flex;align-items:center;justify-content:center;
 }
 .toolbar button:hover { background:rgba(255,120,170,.4); transform:scale(1.1); }
@@ -68,7 +69,8 @@ html,body {
   position:fixed; z-index:45;
   left: calc(var(--av-x, 1370px) - 180px);
   bottom: calc((100vh - var(--av-head-y, 320px)) + 92px);
-  width:360px; max-height:60vh; border-radius:16px; overflow:hidden;
+  /* never overflow the window top: cap by the room above her head */
+  width:360px; max-height:min(60vh, calc(var(--av-head-y, 320px) - 96px)); border-radius:16px; overflow:hidden;
   background:rgba(28,22,36,.88); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.1);
   box-shadow:0 12px 40px rgba(0,0,0,.4);
   transition:opacity .25s ease, transform .25s ease;
@@ -121,7 +123,7 @@ html,body {
 .costume-bar .cb-close { background:none; font-size:18px; padding:0 8px; }
 
 /* ---------- Settings ---------- */
-.settings-body { padding:12px 16px; max-height:calc(60vh - 48px); overflow-y:auto; }
+.settings-body { padding:12px 16px; max-height:calc(min(60vh, var(--av-head-y, 320px) - 96px) - 96px); overflow-y:auto; }
 fieldset { border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:12px; margin-bottom:12px; }
 legend { padding:0 6px; font-size:13px; color:#ff9fc0; }
 fieldset label { display:block; margin:8px 0; font-size:13px; color:#ccc; }

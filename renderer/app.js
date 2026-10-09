@@ -145,17 +145,21 @@ async function boot() {
     avatar.update(dt);   // sync normalized bones -> raw bones, springbones, expressions
     avatar.tickOpacity(dt);
 
-    // Anchor the toolbar/panels above her head: refresh the CSS vars that
-    // position them (throttled - they only change on drag/resize anyway).
+    // Anchor the UI refresh CSS vars (throttled - they only change on
+    // drag/resize anyway): --av-x/--av-head-y keep the panels above her
+    // head, --av-feet-y pins the vertical toolbar to her lower-right side.
     uiVarsT += dt;
     if (uiVarsT > 0.25 && avatar.hasModel()) {
       uiVarsT = 0;
       try {
         const head = sm.worldToScreen(avatar.headWorldPos());
         const foot = sm.worldToScreen(avatar.chestWorldPos());
+        const feet = sm.worldToScreen(avatar.footWorldPos());
         const root = document.documentElement.style;
         root.setProperty('--av-head-y', `${Math.round(head.y)}px`);
         root.setProperty('--av-x', `${Math.round((head.x + foot.x) / 2)}px`);
+        // guard: foot bone projection should never sit above the head
+        root.setProperty('--av-feet-y', `${Math.round(Math.max(feet.y, head.y + 100))}px`);
       } catch {}
     }
   });
