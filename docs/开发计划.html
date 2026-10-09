@@ -422,7 +422,7 @@ table.table tbody tr:hover { background: #e8f0fe; }
 
   <h3 class="heading">P0 — v1.1 收尾（剩 1 项 · 另 6 项已完成）</h3>
   <ul class="list pending-list">
-    <li><strong>electron-builder 打包</strong> — NSIS 安装包；需评估 Python 后端便携化（embedded python / PyInstaller）</li>
+    <li><strong>打包分发（前置：确定最终打包框架）</strong> — 分发安装包等框架定型后执行：v1.x 稳定后先跑 Tauri 2 最小骨架验证（透明窗/置顶/穿透/纹理回收，见 P2 决策），二选一 → ①留 Electron：electron-builder NSIS（评估 Python 便携化）；②迁 Tauri：Tauri 侧打包替代</li>
     <li style="opacity:.45;text-decoration:line-through;">DeepSeek Key 填写后全链路复测（✓ 10-08：Key 已配置，文字对话链路实测打通）</li>
     <li style="opacity:.45;text-decoration:line-through;">FPS 性能埋点（✓ 代码就绪：1s 角标 + 5s console 汇总，设置面板可开关，待部署验证）</li>
     <li style="opacity:.45;text-decoration:line-through;">窗口位置持久化（✓ 10-09：拖拽存档 + clamp 恢复 + 托盘复位，含创建尺寸膨胀修复）</li>
@@ -517,7 +517,7 @@ table.table tbody tr:hover { background: #e8f0fe; }
 
   <!-- ===== 尾页 ===== -->
   <section class="title end_page">
-    <h1>下一步：体验确认 9 项 → 部署 FPS/快捷键 → electron-builder 打包</h1>
+    <h1>下一步：体验确认 9 项 → 部署 FPS/快捷键 → 框架决策（Tauri 骨架验证）→ 打包分发</h1>
     <p>配套文档：docs/PRD.md · docs/开发计划.md · docs/产品需求文档.html<br>启动方式：双击 scripts/启动AI女友.bat</p>
   </section>
 

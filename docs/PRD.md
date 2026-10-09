@@ -222,7 +222,7 @@
 | FR-1201 | 一键启动 BAT：依赖检查 → 后端启动 → 端口就绪探测 → Electron → 退出清理后端 | ✅ | 脚本完成 |
 | FR-1202 | Python venv 隔离环境（不污染全局） | ✅ | .venv 已建立 |
 | FR-1203 | npm 国内镜像（npmmirror）+ pip 清华源 + HF 镜像 | ✅ | 实测下载成功 |
-| FR-1204 | 打包安装程序（electron-builder / NSIS 一键安装） | ⬜ | 待开发 |
+| FR-1204 | 打包安装程序（electron-builder / NSIS 一键安装） | ⬜ | 待开发（前置：先确定最终打包框架——v1.x 稳定后做 Tauri 2 骨架验证二选一，见开发计划 P2） |
 
 ---
 
