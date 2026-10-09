@@ -112,8 +112,8 @@
 | FR-311 | leave 离开（告别挥手→转身→走出画面→淡出） | ✅ | 截图序列 |
 | FR-312 | return 返回（从屏幕右缘走入→转身→挥手） | ✅ | 截图序列（入场姿态确认） |
 | FR-313 | change_costume 换装旋转（720° 旋转 + 中点换模） | ✅ | 动画路径 |
-| FR-314 | 更多动作库（飞吻/伸懒腰/打招乎组合拳等） | ⬜ | 待开发 |
-| FR-315 | 说话时身体语言（边说边小幅手势） | ⬜ | 待开发 |
+| FR-314 | 动作库扩充：nod 点头 / blow_kiss 飞吻 / stretch 伸懒腰（别名归一化 kiss→blow_kiss、yawn→stretch；system_prompt 附触发示例） | ✅ | 骨骼数值 8/8 + stretch 视觉定稿 + LLM E2E“飞个吻”→action=blow_kiss（10-10）；摇头/打招呼组合拳留待后续 |
+| FR-315 | 说话时身体语言（TTS 说话期间在 idle 姿态上 alpha 混合叠加小幅手势层：右臂前抬摆动+头部强调点动） | ✅ | talkPose 手势层：lipsync.speaking 驱动、仅 idle 态生效、轮询容错 TTS 延迟（10-10 视觉+数值验证） |
 
 ### 3.4 交互系统
 
