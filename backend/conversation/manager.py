@@ -7,6 +7,7 @@ import logging
 import os
 import time
 from actions.definitions import extract_json, validate
+from conversation.memory import MemoryStore
 
 logger = logging.getLogger('conv')
 
@@ -20,6 +21,7 @@ class ConversationManager:
         self.llm = llm_manager
         self.system_prompt = system_prompt
         self.history = []
+        self.memory = MemoryStore(config)
         self._restore_history()
 
     # ---------- persistence ----------
@@ -95,6 +97,27 @@ class ConversationManager:
     def clear(self):
         self.history = []
 
+    def _prompt_with_memory(self, user_text):
+        """System prompt + long-term memory injection for this turn."""
+        try:
+            block = self.memory.prompt_block(user_text)
+            if block:
+                return self.system_prompt + block
+        except Exception as e:
+            logger.warning('memory recall failed (ignored): %s', e)
+        return self.system_prompt
+
+    def _absorb_memories(self, result):
+        """Store the memories the LLM extracted alongside its reply."""
+        try:
+            mems = result.get('memories') or []
+            if mems:
+                n = self.memory.add(mems)
+                if n:
+                    logger.info('memory +%d (total %d)', n, len(self.memory.facts))
+        except Exception as e:
+            logger.warning('memory absorb failed (ignored): %s', e)
+
     async def chat(self, user_text, source='text'):
         """
         Full pipeline: user text -> LLM -> validated response dict.
@@ -105,9 +128,10 @@ class ConversationManager:
         # keep memory bounded
         if len(self.history) > self.max_history * 2:
             self.history = self.history[-self.max_history:]
-        raw = await self.llm.chat(self.history, self.system_prompt)
+        raw = await self.llm.chat(self.history, self._prompt_with_memory(user_text))
         data = extract_json(raw)
         result = validate(data, raw)
+        self._absorb_memories(result)
         logger.info('LLM(%s) -> emotion=%s action=%s costume=%s reply=%r',
                     source, result['emotion'], result['action'], result['costume'], result['reply'][:60])
         self.history.append({'role': 'assistant', 'content': result['reply']})
@@ -124,16 +148,17 @@ class ConversationManager:
         self._persist('user', user_text)
         if len(self.history) > self.max_history * 2:
             self.history = self.history[-self.max_history:]
-        raw = await self.llm.chat_stream(self.history, self.system_prompt, on_delta)
+        raw = await self.llm.chat_stream(self.history, self._prompt_with_memory(user_text), on_delta)
         data = extract_json(raw)
         result = validate(data, raw)
+        self._absorb_memories(result)
         if not result['reply']:
             logger.warning('LLM-stream returned empty reply (raw=%r), retrying without json mode', raw[:80])
             try:
                 # DeepSeek's json_object mode intermittently returns a
                 # whitespace-only content (reasoning fine, content blank).
                 # Retrying WITHOUT response_format forces a different path.
-                raw = await self.llm.chat(self.history, self.system_prompt, use_json_format=False)
+                raw = await self.llm.chat(self.history, self._prompt_with_memory(user_text), use_json_format=False)
                 data = extract_json(raw)
                 result = validate(data, raw)
             except Exception as e:

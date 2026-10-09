@@ -10,6 +10,10 @@ VALID_ACTIONS = {
 VALID_EMOTIONS = {'happy', 'shy', 'angry', 'sad', 'surprised', 'caring', 'neutral'}
 VALID_COSTUMES = {'casual', 'school', 'stylish', 'gothic', 'seed'}
 
+# long-term memory extraction caps
+MEMORY_MAX_ITEMS = 5
+MEMORY_MAX_LEN = 120
+
 # maps some natural words the LLM may emit to canonical actions
 ACTION_ALIASES = {
     'pat': 'head_pat', 'headpat': 'head_pat', 'happy': 'wave',
@@ -89,4 +93,22 @@ def validate(data, raw_text=''):
             costume = None
     elif action != 'change_costume':
         costume = None
-    return {'reply': reply, 'emotion': emotion, 'action': action, 'costume': costume}
+    # long-term memory: the LLM may emit "memories" alongside the reply
+    # (see system_prompt). Normalize to a short list of clean strings.
+    memories = []
+    raw_mem = data.get('memories')
+    if isinstance(raw_mem, str):
+        raw_mem = [raw_mem]
+    if isinstance(raw_mem, list):
+        for it in raw_mem:
+            if isinstance(it, dict) and isinstance(it.get('text'), str):
+                it = it['text']
+            if not isinstance(it, str):
+                continue
+            t = it.strip()[:MEMORY_MAX_LEN]
+            if t:
+                memories.append(t)
+            if len(memories) >= MEMORY_MAX_ITEMS:
+                break
+    return {'reply': reply, 'emotion': emotion, 'action': action, 'costume': costume,
+            'memories': memories}

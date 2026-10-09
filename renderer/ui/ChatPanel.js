@@ -12,6 +12,22 @@ export function initChatPanel({ backend }) {
   sendEl.addEventListener('click', send);
   inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
 
+  // long-term memory viewer: list what she remembers about the user
+  document.getElementById('chat-memory')?.addEventListener('click', async () => {
+    try {
+      const msg = await backend.request({ type: 'get_memory' });
+      const items = (msg && Array.isArray(msg.items)) ? msg.items : [];
+      if (!items.length) {
+        addSys('🧠 我还没有记住关于你的长期记忆，多聊聊你的事吧～');
+      } else {
+        const lines = items.map((it, i) => `${i + 1}. ${it.text}${it.score > 1 ? `（${it.score} 次）` : ''}`);
+        addSys('🧠 我记得关于你的事：\n' + lines.join('\n'));
+      }
+    } catch {
+      addSys('🧠 记忆读取失败，稍后再试');
+    }
+  });
+
   bus.on('backend:ai_response', (msg) => { finalizeStream(msg.reply, msg.emotion); });
   bus.on('backend:llm_partial', (msg) => showStreaming(msg.text));
   bus.on('backend:stt_result', (msg) => addUser(msg.text, 'voice'));

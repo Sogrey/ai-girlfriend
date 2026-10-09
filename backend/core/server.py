@@ -136,6 +136,11 @@ class BackendServer:
             await self.send(ws, {'type': 'history_cleared', '_id': mid})
         elif mtype == 'get_history':
             await self.send(ws, {'type': 'history', 'items': self.conv.get_recent_history(30), '_id': mid})
+        elif mtype == 'get_memory':
+            await self.send(ws, {'type': 'memory', 'items': self.conv.memory.to_list(), '_id': mid})
+        elif mtype == 'clear_memory':
+            self.conv.memory.clear()
+            await self.send(ws, {'type': 'memory_cleared', '_id': mid})
         elif mtype == 'user_message':
             await self.handle_chat(ws, msg.get('text', ''), mid)
         elif mtype == 'transcribe_audio':

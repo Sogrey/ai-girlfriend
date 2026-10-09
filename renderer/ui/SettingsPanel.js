@@ -14,6 +14,13 @@ export function initSettingsPanel({ voice }) {
   // provider toggle shows/hides ollama vs deepseek fields
   const sel = document.getElementById('set-llm-provider');
   sel.addEventListener('change', refreshFields);
+
+  // clear long-term memory (independent of the save flow)
+  document.getElementById('set-clear-memory')?.addEventListener('click', () => {
+    if (!confirm('确定让她忘掉全部长期记忆吗？（对话历史不受影响）')) return;
+    bus.emit('backend:send', { type: 'clear_memory' });
+    bus.emit('toast:show', { text: '长期记忆已清除', kind: 'ok', ms: 2000 });
+  });
 }
 
 function refreshFields() {

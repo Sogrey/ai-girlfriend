@@ -8,3 +8,4 @@ dist/
 npm-debug.log*
 backend.pid
 config/history.jsonl
+config/memory.json

@@ -118,6 +118,11 @@ html,body {
 .chat-input-row input:focus { outline:none; border-color:rgba(255,120,170,.5); }
 .chat-input-row button { padding:8px 16px; border:none; border-radius:10px; cursor:pointer; background:rgba(255,120,170,.5); color:#fff; font-size:14px; }
 .chat-input-row button:hover { background:rgba(255,120,170,.7); }
+#chat-memory { width:38px; font-size:15px; padding:6px 0; }
+.settings-body .row-action { display:flex; align-items:center; gap:10px; }
+.settings-body .row-action button { padding:6px 14px; border:none; border-radius:10px; cursor:pointer; background:rgba(255,255,255,.12); color:#fff; font-size:13px; }
+.settings-body .row-action button:hover { background:rgba(255,120,170,.5); }
+.settings-body .row-action .hint { font-size:11.5px; color:#9aa; }
 
 /* ---------- Costume bar (above the toolbar, aligned with the character) ---------- */
 .costume-bar {

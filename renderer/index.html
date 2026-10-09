@@ -34,6 +34,7 @@
   <div id="chat-panel" class="panel hidden">
     <div id="chat-log" class="chat-log"></div>
     <div class="chat-input-row">
+      <button id="chat-memory" title="她记得什么">🧠</button>
       <input id="chat-input" type="text" placeholder="说点什么…" autocomplete="off" />
       <button id="chat-send">发送</button>
     </div>
@@ -123,6 +124,7 @@
         <label><input id="set-startup" type="checkbox" /> 开机自动启动</label>
         <label>召唤/隐藏快捷键 <input id="set-hotkey" type="text" placeholder="Ctrl+Alt+G" /></label>
         <label><input id="set-fps" type="checkbox" /> 显示 FPS 角标（调试用）</label>
+        <label class="row-action"><button id="set-clear-memory" type="button">清除长期记忆</button><span class="hint">忘掉她记住的关于你的事实（不影响对话历史）</span></label>
       </fieldset>
 
       <div class="settings-actions">
