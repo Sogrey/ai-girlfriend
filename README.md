@@ -326,8 +326,8 @@ npm config set registry https://registry.npmmirror.com
 |---|---|
 | `docs/PRD.md` | 产品需求文档（Markdown 源，**实时维护**） |
 | `docs/开发计划.md` | 开发计划（Markdown 源，**实时维护**） |
-| `docs/产品需求文档.html` | PRD 浏览器版（v1.0 历史快照，最新状态以 md 为准） |
-| `docs/开发计划.html` | 进度看板（v1.0.2 历史快照，最新状态以 md 为准） |
+| `docs/产品需求文档.html` | PRD 浏览器版（带状态胶囊可视化，已同步 v1.1.0） |
+| `docs/开发计划.html` | 进度看板（进度条 + 里程碑 + 验证记录，已同步 v1.1.0） |
 
 ---
 

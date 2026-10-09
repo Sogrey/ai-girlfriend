@@ -121,7 +121,8 @@
       <fieldset>
         <legend>系统</legend>
         <label><input id="set-startup" type="checkbox" /> 开机自动启动</label>
-        <label>快捷键 <span class="kbd">Ctrl + Alt + G</span></label>
+        <label>召唤/隐藏快捷键 <input id="set-hotkey" type="text" placeholder="Ctrl+Alt+G" /></label>
+        <label><input id="set-fps" type="checkbox" /> 显示 FPS 角标（调试用）</label>
       </fieldset>
 
       <div class="settings-actions">
@@ -132,6 +133,7 @@
   </div>
 
   <div id="toast-container"></div>
+  <div id="fps-badge" class="fps-badge hidden" title="渲染帧率">--</div>
 
   <script>console.log('[page] inline script runs at', Date.now());</script>
   <script type="module" src="/renderer/app.js"></script>

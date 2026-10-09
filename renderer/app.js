@@ -74,6 +74,14 @@ async function boot() {
     if (tts && typeof tts.volume === 'number') lipsync.setVolume(tts.volume);
   });
 
+  // ---- FPS badge (debug overlay, toggled from settings) ----
+  const fpsBadge = document.getElementById('fps-badge');
+  function applyFpsOverlay() {
+    try { fpsBadge?.classList.toggle('hidden', !cfg().app?.fps_overlay); } catch {}
+  }
+  bus.on('settings:saved', () => applyFpsOverlay());
+  applyFpsOverlay();
+
   bus.on('backend:connected', () => {
     show('后端已连接', 'ok', 1500);
     // replay recent chat history so she "remembers" previous talks
@@ -135,6 +143,7 @@ async function boot() {
 
   // ---- main loop ----
   let uiVarsT = 0;
+  let fpsAcc = 0, fpsCount = 0, fpsSum = 0, fpsSumN = 0, fpsMin = Infinity, fpsMax = 0;
   sm.onFrame((dt) => {
     const gaze = eye.update(dt);
     animation.update(dt, gaze);
@@ -161,6 +170,24 @@ async function boot() {
         // guard: foot bone projection should never sit above the head
         root.setProperty('--av-feet-y', `${Math.round(Math.max(feet.y, head.y + 100))}px`);
       } catch {}
+    }
+
+    // FPS meter: 1s live value on the badge + 5s summary to console.
+    // Pure additive accounting on the existing frame callback - no extra rAF.
+    fpsAcc += dt; fpsCount++;
+    if (fpsAcc >= 1) {
+      const f = fpsCount / fpsAcc;
+      fpsSum += fpsAcc; fpsSumN += fpsCount;
+      fpsMin = Math.min(fpsMin, f); fpsMax = Math.max(fpsMax, f);
+      if (fpsBadge && !fpsBadge.classList.contains('hidden')) {
+        fpsBadge.textContent = Math.round(f) + ' fps';
+        fpsBadge.classList.toggle('low', f < 50);
+      }
+      if (fpsSum >= 5) {
+        console.log(`[fps] avg=${(fpsSumN / fpsSum).toFixed(1)} min=${fpsMin.toFixed(1)} max=${fpsMax.toFixed(1)}`);
+        fpsSum = 0; fpsSumN = 0; fpsMin = Infinity; fpsMax = 0;
+      }
+      fpsAcc = 0; fpsCount = 0;
     }
   });
   sm.start();

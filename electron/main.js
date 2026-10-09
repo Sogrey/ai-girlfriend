@@ -290,8 +290,13 @@ function sendToMain(channel, payload) {
 
 // ---------- shortcut ----------
 function registerShortcut(cfg) {
+  // hot re-register: the ONLY global shortcut in this app is the summon one,
+  // so unregisterAll is safe here.
+  try { globalShortcut.unregisterAll(); } catch {}
   try {
-    globalShortcut.register(cfg.hotkey || 'Control+Alt+G', () => {
+    const accel = (cfg.hotkey || 'Control+Alt+G').trim();
+    if (!accel) return false;
+    globalShortcut.register(accel, () => {
       const heartVisible = heartWindow && heartWindow.isVisible();
       const mainVisible = mainWindow && mainWindow.isVisible();
       if (heartVisible || !mainVisible) {
@@ -301,7 +306,8 @@ function registerShortcut(cfg) {
         sendToMain('shortcut-toggle', { reason: 'leave' });
       }
     });
-  } catch {}
+    return true;
+  } catch { return false; }
 }
 
 // ---------- permissions ----------
@@ -316,7 +322,23 @@ function setupPermissions() {
 // ---------- ipc ----------
 function setupIpc() {
   ipcMain.handle('config:get', () => loadConfig());
-  ipcMain.handle('config:update', (_e, patch) => saveUserConfig(patch));
+  ipcMain.handle('config:update', (_e, patch) => {
+    const oldHotkey = (configCache && configCache.hotkey) || 'Control+Alt+G';
+    const rawHotkey = patch && typeof patch.hotkey === 'string' ? patch.hotkey.trim() : '';
+    const merged = saveUserConfig(patch);
+    // hot re-register on hotkey change; roll back to the previous accelerator
+    // when the new one is invalid/occupied so summoning keeps working.
+    if (rawHotkey && rawHotkey !== oldHotkey) {
+      if (registerShortcut(merged)) {
+        merged._hotkey_applied = rawHotkey;
+      } else {
+        saveUserConfig({ hotkey: oldHotkey });
+        merged.hotkey = oldHotkey;
+        merged._hotkey_error = rawHotkey;
+      }
+    }
+    return merged;
+  });
   ipcMain.handle('window:info', () => {
     const sz = getPrimarySize();
     const b = mainWindow ? mainWindow.getBounds() : { x: 0, y: 0, width: sz.width, height: sz.height };

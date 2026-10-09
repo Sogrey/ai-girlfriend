@@ -44,6 +44,17 @@ html,body {
 .rec-indicator .dot { width:8px;height:8px;border-radius:50%;background:#ff4060;animation:pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
 
+/* ---------- FPS badge (debug overlay, toggle in settings) ---------- */
+.fps-badge {
+  position:fixed; z-index:60; left:10px; bottom:10px;
+  padding:3px 8px; border-radius:8px;
+  font:11px/1.4 Consolas, monospace; color:#9fe8c9;
+  background:rgba(20,20,26,.6); border:1px solid rgba(159,232,201,.25);
+  pointer-events:none; user-select:none;
+}
+.fps-badge.hidden { display:none; }
+.fps-badge.low { color:#ffb08a; border-color:rgba(255,176,138,.35); }
+
 /* ---------- Toolbar (vertical, pinned to her lower-right side) ---------- */
 /* --av-x: character center x, --av-feet-y: feet screen-y — both maintained */
 /* by the app.js main loop. Slim bar hugs her right side (≈10px visual gap), */

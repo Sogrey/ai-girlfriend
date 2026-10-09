@@ -185,7 +185,7 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
   <section class="title">
     <h1>3D 桌面 AI 女友</h1>
     <div class="accent-line"></div>
-    <p>产品需求文档（PRD）· v1.0 · MVP 已交付基线<br>Desktop AI Girlfriend — Electron 34 + Three.js VRM + DeepSeek + Faster-Whisper + Edge-TTS</p>
+    <p>产品需求文档（PRD）· v1.1.0 · v1.1 打磨包已交付基线<br>Desktop AI Girlfriend — Electron 34 + Three.js VRM + DeepSeek + Faster-Whisper + Edge-TTS</p>
   </section>
 
   <!-- ===== 文档信息 ===== -->
@@ -195,7 +195,7 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
       <tbody>
         <tr><td><strong>产品名称</strong></td><td>3D 桌面 AI 女友（Desktop AI Girlfriend）</td></tr>
         <tr><td><strong>文档版本</strong></td><td>v1.0（MVP 交付基线，2026-10-01）</td></tr>
-        <tr><td><strong>产品状态</strong></td><td><span class="status-pill success">MVP 已交付</span> 核心链路端到端验证通过；5 项待人工确认；14 项待开发</td></tr>
+        <tr><td><strong>产品状态</strong></td><td><span class="status-pill success">v1.1 已交付</span> 持久化/布局重构/交互修复/流式回复全部落地；9 项待人工确认；12 项待开发</td></tr>
         <tr><td><strong>代码规模</strong></td><td>约 46 个源码文件 · Electron + Python 双进程架构 · 项目位于 <code>ai-girlfriend/</code></td></tr>
         <tr><td><strong>配套文档</strong></td><td>开发计划看板 <code>docs/开发计划.html</code> · 源文档 <code>docs/PRD.md</code> / <code>docs/开发计划.md</code></td></tr>
       </tbody>
@@ -282,7 +282,9 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
         <tr><td>FR-108</td><td>全局快捷键 Ctrl+Alt+G 召回/隐藏</td><td><span class="status-pill success">已完成</span></td><td>注册成功无冲突</td></tr>
         <tr><td>FR-109</td><td>开机自启动配置</td><td><span class="status-pill warning">待确认</span></td><td>未实际重启验证</td></tr>
         <tr><td>FR-110</td><td>app:// 自定义协议服务本地资源（fetch/importmap/VRM 二进制）</td><td><span class="status-pill success">已完成</span></td><td>全部模块经此加载</td></tr>
-        <tr><td>FR-111</td><td>窗口位置持久化（记住上次摆放位置）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+        <tr><td>FR-111</td><td>窗口位置持久化（拖拽存档 + 启动 clamp 恢复 + 托盘“位置复位”；含非零位置创建尺寸膨胀修复）</td><td><span class="status-pill success">已完成</span></td><td>拖 (4,-28)→重启精确恢复，1536×864 无膨胀</td></tr>
+        <tr><td>FR-112</td><td>单实例锁（双开自动退出，后端端口复用）</td><td><span class="status-pill success">已完成</span></td><td>双开实测 Electron 数不变</td></tr>
+        <tr><td>FR-113</td><td>应用图标（girl-256 窗口/托盘/溢出面板统一）</td><td><span class="status-pill success">已完成</span></td><td>满幅清晰度实测</td></tr>
       </tbody>
     </table>
   </div>
@@ -343,7 +345,7 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
         <tr><td>FR-402</td><td>长按头部 650ms→摸头（与拖拽互斥）</td><td><span class="status-pill success">已完成</span></td><td>事件状态机</td></tr>
         <tr><td>FR-403</td><td>摸头反馈：shy 表情 + 爱心粒子 + 6 条随机专属语音</td><td><span class="status-pill success">已完成</span></td><td>全链路代码</td></tr>
         <tr><td>FR-404</td><td>点击身体→注意反应（星光粒子）</td><td><span class="status-pill success">已完成</span></td><td>代码路径</td></tr>
-        <tr><td>FR-405</td><td>底部工具栏 5 键，靠近淡入/离开淡出</td><td><span class="status-pill success">已完成</span></td><td>DOM+bus 架构</td></tr>
+        <tr><td>FR-405</td><td>纵向贴身工具栏：5 键竖排人物右下角（46×198px，距手臂约一指宽，脚骨投影锚底），靠近淡入/离开淡出</td><td><span class="status-pill success">已完成</span></td><td>两轮热调+三选一视觉终验“近身”</td>OM+bus 架构</td></tr>
         <tr><td>FR-406</td><td>粒子系统：爱心/星光/爆散，Canvas 纹理 + 60 Sprite 池</td><td><span class="status-pill success">已完成</span></td><td>代码路径</td></tr>
       </tbody>
     </table>
@@ -383,8 +385,10 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
         <tr><td>FR-608</td><td>语音与文字共用同一对话管道</td><td><span class="status-pill success">已完成</span></td><td>统一分发</td></tr>
         <tr><td>FR-609</td><td>API Key 安全存储（user.json，git 忽略）</td><td><span class="status-pill success">已完成</span></td><td>.gitignore 覆盖</td></tr>
         <tr><td>FR-610</td><td>错误处理：401/402/429/超时/断网中文提示</td><td><span class="status-pill success">已完成</span></td><td>冒烟测试验证</td></tr>
-        <tr><td>FR-611</td><td>对话历史持久化（重启保留）</td><td><span class="status-pill pending">待开发</span></td><td>—</td></tr>
+        <tr><td>FR-611</td><td>对话历史持久化（JSONL 落盘 + 启动恢复上下文 + 重启回填气泡，clear 删档）</td><td><span class="status-pill success">已完成</span></td><td>两轮重启回填验证</td></tr>
         <tr><td>FR-612</td><td>长期记忆（跨会话用户画像）</td><td><span class="status-pill pending">待开发</span></td><td>v2 方向</td></tr>
+        <tr><td>FR-613</td><td>流式回复（DeepSeek SSE → llm_partial → 思考气泡→打字机→定格 Markdown）</td><td><span class="status-pill success">已完成</span></td><td>首字 ~1.4s，端到端验收</td></tr>
+        <tr><td>FR-614</td><td>空回复三层防线（max_tokens 2048 / 后端重试+兜底台词 / 前端永不空白）</td><td><span class="status-pill success">已完成</span></td><td>13/13 压测零空气泡零双答</td></tr>
       </tbody>
     </table>
   </div>
@@ -441,12 +445,12 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
         <tr><td>FR-1004</td><td>换装演出：旋转+星光+中点换模</td><td><span class="status-pill success">已完成</span></td><td>动画路径</td></tr>
         <tr><td>FR-1005</td><td>换装三入口：语音/工具栏/托盘</td><td><span class="status-pill success">已完成</span></td><td>完成</td></tr>
         <tr><td>FR-1006</td><td>5 套专属角色 VRM 文件</td><td><span class="status-pill pending">待用户提供</span></td><td>素材待放置</td></tr>
-        <tr><td>FR-1101</td><td>文字聊天面板（气泡/发送/STT 回显）</td><td><span class="status-pill success">已完成</span></td><td>DOM 完成</td></tr>
+        <tr><td>FR-1101</td><td>文字聊天面板（气泡/发送/STT 回显；AI 气泡轻量 Markdown 渲染 + 可点击链接跳浏览器）</td><td><span class="status-pill success">已完成</span></td><td>11/11 单测 + 端到端</td></tr>
         <tr><td>FR-1102</td><td>设置面板 6 组配置全量可调</td><td><span class="status-pill success">已完成</span></td><td>完成</td></tr>
         <tr><td>FR-1103</td><td>Toast 错误/提示系统</td><td><span class="status-pill success">已完成</span></td><td>冒烟验证</td></tr>
         <tr><td>FR-1104</td><td>录音状态指示器</td><td><span class="status-pill success">已完成</span></td><td>DOM 完成</td></tr>
         <tr><td>FR-1105</td><td>设置保存→持久化→后端热重载</td><td><span class="status-pill success">已完成</span></td><td>链路完成</td></tr>
-        <tr><td>FR-1106</td><td>快捷键自定义 UI 入口</td><td><span class="status-pill pending">待开发</span></td><td>配置可改文件</td></tr>
+        <tr><td>FR-1106</td><td>快捷键自定义 UI 入口（设置面板输入 + 热重注册 + 失败回滚提示）</td><td><span class="status-pill warning">待部署</span></td><td>代码就绪，待重启验证</td></tr>
         <tr><td>FR-1201</td><td>一键 BAT：依赖检查→后端→就绪探测→Electron→清理</td><td><span class="status-pill success">已完成</span></td><td>脚本完成</td></tr>
         <tr><td>FR-1202</td><td>Python venv 隔离环境</td><td><span class="status-pill success">已完成</span></td><td>.venv 已建立</td></tr>
         <tr><td>FR-1203</td><td>npm/pip/HF 三层国内镜像</td><td><span class="status-pill success">已完成</span></td><td>实测下载成功</td></tr>
@@ -510,7 +514,7 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
   </div>
 
   <!-- ===== 六、验收标准 ===== -->
-  <h1 class="heading">六、验收标准（22 条全部通过）</h1>
+  <h1 class="heading">六、验收标准（23 条全部通过）</h1>
   <div class="table-wrap">
     <table class="table" data-caption="原始需求验收映射">
       <colgroup><col style="width:8%"><col style="width:72%"><col style="width:20%"></colgroup>
@@ -538,6 +542,7 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
         <tr><td>20</td><td>Ctrl+Alt+G 唤醒/隐藏</td><td><span class="status-pill success">通过</span></td></tr>
         <tr><td>21</td><td>托盘控制</td><td><span class="status-pill success">通过</span></td></tr>
         <tr><td>22</td><td>设置面板可改模型/声音/角色</td><td><span class="status-pill success">通过</span></td></tr>
+<tr><td>23</td><td>重启保留对话历史与窗口位置（v1.1）</td><td><span class="status-pill success">通过</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -579,7 +584,7 @@ code { background: #eef5ff; color: #2563eb; padding: 1px 5px; border-radius: 4px
 
   <!-- ===== 尾页 ===== -->
   <section class="title end_page">
-    <h1>PRD v1.0 · MVP 交付基线</h1>
+    <h1>PRD v1.1.0 · v1.1 打磨包交付基线</h1>
     <p>96 项功能需求 · 77 项已验证 · 22 条验收标准全部通过<br>
     进度详情见 <strong>docs/开发计划.html</strong> · 启动方式：双击 scripts/启动AI女友.bat</p>
   </section>
