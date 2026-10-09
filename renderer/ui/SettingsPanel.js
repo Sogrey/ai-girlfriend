@@ -58,10 +58,16 @@ function save() {
       deepseek: { api_key: getVal('set-deepseek-key'), model: getVal('set-deepseek-model') },
       ollama: { base_url: getVal('set-ollama-url'), model: getVal('set-ollama-model') },
     },
-    app: {
-      persona_name: getVal('set-persona'), user_name: getVal('set-username'),
-      fps_overlay: document.getElementById('set-fps').checked,
-    },
+    // app: omit empty persona/username so a save from a non-loaded panel
+    // (e.g. scripted tests) can never blank out the defaults from config.json
+    app: (() => {
+      const p = { fps_overlay: document.getElementById('set-fps').checked };
+      const persona = (getVal('set-persona') || '').trim();
+      const uname = (getVal('set-username') || '').trim();
+      if (persona) p.persona_name = persona;
+      if (uname) p.user_name = uname;
+      return p;
+    })(),
     stt: {
       model: getVal('set-whisper-model'),
       language: getVal('set-whisper-lang'),
