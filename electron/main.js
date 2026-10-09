@@ -121,9 +121,11 @@ function clampWindowPos(x, y, w, h) {
 // Apply a remembered (or default) window position with clamping.
 function applyWindowPos(x, y) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const b = mainWindow.getBounds();
-  const pos = clampWindowPos(x, y, b.width, b.height);
-  mainWindow.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
+  // Lock size to the canonical primary size (see window:moveBy note about
+  // cross-DPI inflation: never propagate a possibly-inflated getBounds size).
+  const d = screen.getPrimaryDisplay().bounds;
+  const pos = clampWindowPos(x, y, d.width, d.height);
+  mainWindow.setBounds({ x: pos.x, y: pos.y, width: d.width, height: d.height });
 }
 
 function createMainWindow(cfg) {
@@ -358,9 +360,17 @@ function setupIpc() {
   ipcMain.on('window:moveBy', (_e, dx, dy) => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const b = mainWindow.getBounds();
-    // clamp so a runaway drag can never strand the character off-screen
-    const pos = clampWindowPos(b.x + dx, b.y + dy, b.width, b.height);
-    mainWindow.setBounds({ x: pos.x, y: pos.y, width: b.width, height: b.height });
+    // Lock the size to the primary display DIP size: once a window crosses a
+    // mixed-DPI monitor boundary Windows can inflate its bounds (observed
+    // 1632x900 vs 1536x864), and getBounds() would then propagate the
+    // inflated size on every drag. Always restore the canonical size.
+    const d = screen.getPrimaryDisplay().bounds;
+    const w = d.width, h = d.height;
+    const pos = clampWindowPos(b.x + dx, b.y + dy, w, h);
+    if (b.width !== w || b.height !== h) {
+      console.log(`[window] size inflation detected (${b.width}x${b.height}), restoring ${w}x${h}`);
+    }
+    mainWindow.setBounds({ x: pos.x, y: pos.y, width: w, height: h });
   });
   ipcMain.on('window:setIgnoreMouse', (_e, ignore) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setIgnoreMouseEvents(!!ignore, { forward: true });

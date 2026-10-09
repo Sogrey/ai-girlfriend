@@ -24,9 +24,14 @@ class ConversationManager:
 
     # ---------- persistence ----------
 
+    # history.jsonl is append-only; compact it on boot so the file cannot
+    # grow forever (months of chatting would otherwise bloat it endlessly).
+    FILE_KEEP = 400  # rows kept when compacting on startup
+
     def _restore_history(self):
         """Load the tail of history.jsonl so she remembers prior talks.
-        Keeps the last `max_history` user+assistant turns for context."""
+        Keeps the last `max_history` user+assistant turns for context.
+        If the file exceeds FILE_KEEP rows it is compacted in place."""
         try:
             rows = []
             with open(HISTORY_PATH, 'r', encoding='utf-8') as f:
@@ -40,6 +45,16 @@ class ConversationManager:
                         continue
                     if isinstance(r, dict) and r.get('role') in ('user', 'assistant') and r.get('content'):
                         rows.append({'role': r['role'], 'content': r['content']})
+            if len(rows) > self.FILE_KEEP:
+                try:
+                    tmp = HISTORY_PATH + '.tmp'
+                    with open(tmp, 'w', encoding='utf-8') as f:
+                        for r in rows[-self.FILE_KEEP:]:
+                            f.write(json.dumps(r, ensure_ascii=False) + '\n')
+                    os.replace(tmp, HISTORY_PATH)
+                    logger.info('history.jsonl compacted to last %d rows (was %d)', self.FILE_KEEP, len(rows))
+                except Exception as e:
+                    logger.warning('cannot compact history file: %s', e)
             keep = self.max_history * 2
             self.history = rows[-keep:] if len(rows) > keep else rows
             if self.history:

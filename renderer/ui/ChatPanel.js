@@ -170,5 +170,15 @@ export function addSys(text) {
 }
 
 function scrollDown() {
+  // Rolling trim: long chats used to pile bubbles up in the DOM forever.
+  // Keep the most recent 60; never remove the active thinking/stream bubble.
+  const MAX = 60;
+  const msgs = logEl.querySelectorAll('.chat-msg');
+  if (msgs.length > MAX) {
+    for (let i = 0; i < msgs.length - MAX; i++) {
+      if (msgs[i].classList.contains('typing')) continue;
+      msgs[i].remove();
+    }
+  }
   requestAnimationFrame(() => { logEl.scrollTop = logEl.scrollHeight; });
 }
