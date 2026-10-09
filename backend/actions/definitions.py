@@ -5,7 +5,7 @@ import re
 
 VALID_ACTIONS = {
     'idle', 'wave', 'leave', 'return', 'change_costume', 'comfort',
-    'head_pat', 'jump', 'dance', 'think',
+    'head_pat', 'jump', 'dance', 'think', 'nod', 'blow_kiss', 'stretch',
 }
 VALID_EMOTIONS = {'happy', 'shy', 'angry', 'sad', 'surprised', 'caring', 'neutral'}
 VALID_COSTUMES = {'casual', 'school', 'stylish', 'gothic', 'seed'}
@@ -20,6 +20,8 @@ ACTION_ALIASES = {
     'greet': 'wave', 'goodbye': 'leave', 'sleep': 'leave', 'rest': 'leave',
     'comeback': 'return', 'come_back': 'return', 'costume': 'change_costume',
     'changecostume': 'change_costume', 'cheer': 'jump',
+    'kiss': 'blow_kiss', 'blowkiss': 'blow_kiss', 'flying_kiss': 'blow_kiss',
+    'yawn': 'stretch', 'lazy': 'stretch',
 }
 EMOTION_ALIASES = {
     'joy': 'happy', 'excited': 'happy', 'love': 'happy', 'embarrassed': 'shy',

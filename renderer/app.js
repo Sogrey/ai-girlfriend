@@ -146,6 +146,8 @@ async function boot() {
   let fpsAcc = 0, fpsCount = 0, fpsSum = 0, fpsSumN = 0, fpsMin = Infinity, fpsMax = 0;
   sm.onFrame((dt) => {
     const gaze = eye.update(dt);
+    // speech gesturing: while TTS is playing her idle pose gets light gestures
+    animation.setTalking(lipsync.speaking);
     animation.update(dt, gaze);
     emotion.update(dt);
     lipsync.update(dt);
@@ -216,6 +218,10 @@ async function boot() {
   });
 
   console.log('AI Girlfriend boot complete.');
+
+  // Debug/test bridge: exposes live instances for CDP-based automated tests
+  // (bone sampling, animation state checks). Harmless in production.
+  window.__agf = { animation, avatar, dispatcher, lipsync, eye, emotion, particles, costume };
 }
 
 window.addEventListener('error', (e) => show('运行时错误: ' + (e.error?.message || e.message), 'error', 5000));

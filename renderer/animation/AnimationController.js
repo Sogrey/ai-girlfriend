@@ -49,6 +49,23 @@ function walkCycle(P, phase, amp = 0.35) {
   set(P, 'rightUpperArm', s * amp * 0.7, 0, 1.15);
 }
 
+// Talk gesture overlay: light arm gesturing + head emphasis while she
+// speaks (TTS playing). Blended on top of idle with alpha so it fades in/out.
+function talkPose(t, P, S, a) {
+  const beat = Math.sin(t * 3.1);
+  const mix = (bone, x, y, z) => {
+    const cur = P[bone] || { x: 0, y: 0, z: 0 };
+    P[bone] = { x: lerp(cur.x, x, a), y: lerp(cur.y, y, a), z: lerp(cur.z, z, a) };
+  };
+  // right arm slightly raised in front, forearm swaying with speech rhythm
+  mix('rightUpperArm', -0.4, -0.1, 0.85);
+  mix('rightLowerArm', -0.95 + beat * 0.06, -0.15, 0.32 + beat * 0.09);
+  mix('rightHand', 0.1, 0, 0.15 + beat * 0.05);
+  // subtle torso groove + head emphasis nods
+  mix('chest', 0.02, beat * 0.025, 0);
+  mix('head', Math.sin(t * 1.7) * 0.03, Math.sin(t * 1.15) * 0.025, 0);
+}
+
 // ------------------ action definitions ------------------
 const ACTIONS = {
   wave: {
@@ -229,6 +246,64 @@ const ACTIONS = {
       if (u >= 1) S.spinY = 0;
     },
   },
+  nod: {
+    dur: 1.4,
+    fn(u, t, P, S) {
+      // 1.5 nod cycles with a slight affirming base tilt
+      const n = Math.sin(u * Math.PI * 3);
+      const env = Math.sin(u * Math.PI); // ease in/out
+      set(P, 'head', 0.06 + n * 0.14 * env, 0, 0);
+      set(P, 'neck', 0.02 + n * 0.05 * env, 0, 0);
+    },
+  },
+  blow_kiss: {
+    dur: 2.2,
+    fn(u, t, P, S) {
+      // phase 1 (u<=0.4): hand rises to the mouth (elbow deep bend)
+      // phase 2 (0.4<u<=0.8): forearm extends toward the viewer, palm opens
+      // phase 3: hold the send pose, easing back is handled by pose damping
+      const toMouth = easeInOut(clamp(u / 0.4, 0, 1));
+      const send = easeInOut(clamp((u - 0.4) / 0.4, 0, 1));
+      const hold = 1 - send;
+      // upper arm: forward-raised throughout (hand at mouth height)
+      set(P, 'rightUpperArm', -1.3 * toMouth, -0.2, 0.5 * hold + 0.3 * send);
+      // elbow: deeply bent at the mouth (-1.7), extends toward viewer (-0.3)
+      set(P, 'rightLowerArm', (-1.7 * hold + -0.3 * send) * toMouth, -0.1, 0.25 * hold + 0.05 * send);
+      // palm: closed near mouth, opens toward viewer when sending
+      set(P, 'rightHand', 0.3 * hold + -0.5 * send, 0, 0.12);
+      // head tilts slightly toward the hand as the kiss goes out
+      set(P, 'head', 0.05 * send, -0.12 * send, -0.04 * send);
+      // left arm stays relaxed at the side
+      set(P, 'leftUpperArm', 0.08, 0, -1.25);
+      set(P, 'leftLowerArm', -0.06, 0.18, -0.12);
+    },
+  },
+  stretch: {
+    dur: 3.4,
+    fn(u, t, P, S) {
+      // arms rise overhead (30%), hold with a wobble, come back down (30%).
+      // NOTE: for VRM normalized upper arms the SIDE-RAISE axis is Z
+      // (1.32 = hanging down, ~0.35 = raised, negative = overhead/out);
+      // X is only the forward/back swing. Verified against wave/surprised.
+      const rise = easeInOut(clamp(u / 0.3, 0, 1));
+      const fall = easeInOut(clamp((u - 0.7) / 0.3, 0, 1));
+      const up = rise * (1 - fall);
+      const wob = Math.sin(t * 3) * 0.05 * up;
+      // Calibrated (probe-verified): the forward-raise X axis puts the arms
+      // overhead (~-2.7 rad); Z stays slightly open to avoid body clipping.
+      set(P, 'leftUpperArm', -2.7 * up, 0, -(0.35 + wob));
+      set(P, 'rightUpperArm', -2.7 * up, 0, 0.35 + wob);
+      set(P, 'leftLowerArm', -0.06, 0.18, -(0.12 + 0.4 * up));
+      set(P, 'rightLowerArm', -0.06, -0.18, 0.12 + 0.4 * up);
+      set(P, 'leftHand', 0, 0, -0.08 - 0.1 * up);
+      set(P, 'rightHand', 0, 0, 0.08 + 0.1 * up);
+      // lean back slightly, look up
+      set(P, 'spine', -0.12 * up, 0, 0);
+      set(P, 'chest', -0.05 * up, 0, 0);
+      set(P, 'head', 0.14 * up, 0, 0);
+      S.posY = up * 0.015; // a tiny lift on the tiptoe stretch
+    },
+  },
 };
 
 export class AnimationController {
@@ -250,9 +325,19 @@ export class AnimationController {
     this._rotY = 0;
     this._spinY = 0;
     this._firstFrame = true;
+    // talking overlay state (speech gesturing, alpha-blended over idle)
+    this._talking = false;
+    this._talkA = 0;
   }
 
   get isBusy() { return this.state !== 'idle'; }
+
+  // speech gesturing: while she talks (TTS playing) her idle pose gets a
+  // light gesturing overlay. Ignored while a named action is playing.
+  setTalking(on) {
+    const v = !!on;
+    if (this._talking !== v) this._talking = v;
+  }
 
   play(name, opts = {}) {
     if (!ACTIONS[name]) name = 'idle';
@@ -281,6 +366,11 @@ export class AnimationController {
     const S = { posX: 0, posY: 0, rotY: 0, opacity: 1, spinY: this._spinY };
 
     idlePose(this.t, P, S);
+
+    // talking overlay blends over idle only (named actions take precedence)
+    const talkTarget = (this._talking && this.state === 'idle') ? 1 : 0;
+    this._talkA = lerp(this._talkA, talkTarget, 1 - Math.exp(-4 * dt));
+    if (this._talkA > 0.02) talkPose(this.t, P, S, this._talkA);
 
     if (act) {
       this.u += dt / act.dur;

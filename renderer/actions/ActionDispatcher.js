@@ -75,6 +75,19 @@ export class ActionDispatcher {
       case 'think':
         anim.play('think', { dur: ACTION_DURATIONS.think });
         break;
+      case 'nod':
+        anim.play('nod', { dur: ACTION_DURATIONS.nod });
+        break;
+      case 'blow_kiss': {
+        this.emotion.set('shy', { hold: 3 });
+        anim.play('blow_kiss', { dur: ACTION_DURATIONS.blow_kiss });
+        const kp = this.avatar.headWorldPos().clone().add(new THREE.Vector3(0.1, 0.2, 0.3));
+        this.particles.spawnHearts(kp, 6);
+        break;
+      }
+      case 'stretch':
+        anim.play('stretch', { dur: ACTION_DURATIONS.stretch });
+        break;
       case 'head_pat': {
         this.emotion.set('shy', { hold: 3.5 });
         anim.play('head_pat', { dur: ACTION_DURATIONS.head_pat });
