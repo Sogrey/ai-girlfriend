@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>测试用例看板 · 3D 桌面 AI 女友</title>
+<style>
+  :root {
+    --bg: #f6f8fb; --card: #ffffff; --ink: #1f2d3d; --sub: #5b6b80;
+    --line: #e3e9f2; --brand: #4f46e5; --ok: #16a34a; --okbg: #E8F5E9;
+    --fail: #dc2626; --failbg: #FEF2F2; --todo: #64748b; --todobg: #f1f5f9;
+    --warn: #d97706; --warnbg: #FFF3E0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); padding: 28px 20px 60px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header h1 { font-size: 22px; margin-bottom: 4px; }
+  header .meta { color: var(--sub); font-size: 13px; margin-bottom: 16px; }
+  .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px; }
+  .sum-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; text-align: center; }
+  .sum-card .n { font-size: 22px; font-weight: 700; }
+  .sum-card .t { font-size: 12px; color: var(--sub); }
+  .sum-card.pass .n { color: var(--ok); } .sum-card.fail .n { color: var(--fail); }
+  .bar { height: 10px; background: var(--todobg); border-radius: 6px; overflow: hidden; display: flex; margin-bottom: 22px; }
+  .bar .p { background: var(--ok); } .bar .f { background: var(--fail); }
+  .toolbar-row { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  button.act { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; color: var(--ink); }
+  button.act:hover { border-color: var(--brand); color: var(--brand); }
+  .mod-head { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 10px; }
+  .mod-head h2 { font-size: 16px; }
+  .mod-head .stat { font-size: 12px; color: var(--sub); }
+  .case { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; display: flex; gap: 12px; align-items: flex-start; }
+  .case .badge { font-size: 11px; font-family: Consolas, monospace; background: var(--todobg); color: var(--todo); border-radius: 6px; padding: 3px 7px; white-space: nowrap; margin-top: 2px; }
+  .case .body { flex: 1; min-width: 0; }
+  .case .title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .case .title .pend { color: var(--warn); font-size: 12px; font-weight: 400; margin-left: 6px; }
+  .case .desc { font-size: 12.5px; color: var(--sub); line-height: 1.6; }
+  .case .desc b { color: var(--ink); }
+  .case .note { margin-top: 6px; font-size: 12.5px; color: var(--fail); background: var(--failbg); border-radius: 6px; padding: 5px 8px; }
+  .case .st { border: none; border-radius: 999px; padding: 5px 0; width: 52px; font-size: 12.5px; cursor: pointer; font-weight: 600; background: var(--todobg); color: var(--todo); white-space: nowrap; margin-top: 2px; }
+  .case .st.pass { background: var(--okbg); color: var(--ok); }
+  .case .st.fail { background: var(--failbg); color: var(--fail); }
+  .case.passed { border-color: #b9e4c4; } .case.failed { border-color: #f5b5b5; }
+  footer { margin-top: 30px; font-size: 12.5px; color: var(--sub); line-height: 1.9; border-top: 1px solid var(--line); padding-top: 14px; }
+  code { background: var(--todobg); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>测试用例看板</h1>
+    <div class="meta">3D 桌面 AI 女友 · 基线 v1.1.0 · 用例清单 v1.0（72 条）· 勾选自动保存在本浏览器（localStorage），清浏览器数据会丢，重要结果请「复制结果」发给助手回写 md</div>
+  </header>
+
+  <div class="summary">
+    <div class="sum-card"><div class="n" id="s-total">0</div><div class="t">用例总数</div></div>
+    <div class="sum-card pass"><div class="n" id="s-pass">0</div><div class="t">通过</div></div>
+    <div class="sum-card fail"><div class="n" id="s-fail">0</div><div class="t">失败</div></div>
+    <div class="sum-card"><div class="n" id="s-todo">0</div><div class="t">待测</div></div>
+    <div class="sum-card"><div class="n" id="s-pend">0</div><div class="t">待部署</div></div>
+  </div>
+  <div class="bar"><div class="p" id="bar-p"></div><div class="f" id="bar-f"></div></div>
+
+  <div class="toolbar-row">
+    <button class="act" id="btn-copy">📋 复制结果</button>
+    <button class="act" id="btn-reset">↺ 重置全部勾选</button>
+    <button class="act" id="btn-expand">⤵ 展开/收起全部</button>
+  </div>
+
+  <div id="board"></div>
+
+  <footer>
+    <b>使用说明</b>：点击每条右侧状态按钮循环切换 <code>待测 → 通过 → 失败 → 待测</code>；失败时会要求填一句现象备注。<br>
+    <b>持续维护</b>：新功能交付后在 <code>docs/测试用例清单.md</code>（文档源头）追加用例，并同步本看板的 <code>CASES</code> 数组；正式测试结果以 md 为准。<br>
+    <b>结果回传</b>：点「复制结果」把勾选状态文本发给助手，由助手更新 md 的进度汇总表与用例勾选状态。
+  </footer>
+</div>
+
+<script>
+const CASES = [
+  { id:'TC-101', mod:'1xx 启动与窗口', title:'一键启动全链路', d:'双击 <b>启动AI女友.bat</b> ｜ 预期：后端先起 → 人物带 intro 出现 → 托盘爱心图标，全程免手动' },
+  { id:'TC-102', mod:'1xx 启动与窗口', title:'首启无半成品画面', d:'冷启动观察第一帧 ｜ 预期：完整纹理出现，无白色/半透明虚影闪现' },
+  { id:'TC-103', mod:'1xx 启动与窗口', title:'窗口置顶', d:'打开全屏软件 ｜ 预期：人物始终盖在其上' },
+  { id:'TC-104', mod:'1xx 启动与窗口', title:'点击穿透', d:'人物以外区域点击/拖选 ｜ 预期：事件落到桌面，人物不拦截' },
+  { id:'TC-105', mod:'1xx 启动与窗口', title:'拖动人物', d:'按住身体拖动 ｜ 预期：窗口跟手，松手停位' },
+  { id:'TC-106', mod:'1xx 启动与窗口', title:'拖动边界保护', d:'往屏幕四边拖到底 ｜ 预期：clamp 在屏内，拖不丢' },
+  { id:'TC-107', mod:'1xx 启动与窗口', title:'托盘位置复位', d:'拖走后托盘右键“位置复位” ｜ 预期：回默认右下角站位' },
+  { id:'TC-108', mod:'1xx 启动与窗口', title:'重启位置记忆', d:'拖动 → 退出 → 重启 ｜ 预期：出现在拖动后位置（偏差≤2px）' },
+  { id:'TC-109', mod:'1xx 启动与窗口', title:'单实例锁', d:'运行中再双击 BAT ｜ 预期：第二实例自动退出，无双人物' },
+  { id:'TC-110', mod:'1xx 启动与窗口', title:'站位与几何', d:'启动后观察 ｜ 预期：脚底贴任务栏上沿，人物无偏移错位（尺寸膨胀回归）' },
+  { id:'TC-111', mod:'1xx 启动与窗口', title:'开机自启动', d:'设置勾选自启 → 重启电脑 ｜ 预期：登录后自动出现' },
+  { id:'TC-201', mod:'2xx 角色与动画', title:'入场动画', d:'启动/召回观察 ｜ 预期：右缘走入→转身→挥手完整播放' },
+  { id:'TC-202', mod:'2xx 角色与动画', title:'Idle 自然感', d:'静置 1 分钟 ｜ 预期：呼吸起伏 ~4.5s 周期+微摆' },
+  { id:'TC-203', mod:'2xx 角色与动画', title:'自动眨眼', d:'静置观察 ｜ 预期：每 2~5 秒自然眨眼一次' },
+  { id:'TC-204', mod:'2xx 角色与动画', title:'眼神跟随', d:'鼠标缓移 ｜ 预期：头+眼平滑跟随，阻尼不生硬' },
+  { id:'TC-205', mod:'2xx 角色与动画', title:'挥手动作', d:'说“你好/打个招呼” ｜ 预期：举臂挥手自然' },
+  { id:'TC-206', mod:'2xx 角色与动画', title:'发丝物理', d:'移动/动画时观察 ｜ 预期：头发裙摆惯性摆动（示例模型效果弱属正常）' },
+  { id:'TC-301', mod:'3xx 交互', title:'全身召唤工具栏', d:'悬停<b>腿部</b>等下半身 ｜ 预期：纵向工具栏淡入（旧死区回归项）' },
+  { id:'TC-302', mod:'3xx 交互', title:'离开淡出', d:'移离人物 ~0.3s ｜ 预期：工具栏淡出' },
+  { id:'TC-303', mod:'3xx 交互', title:'点击摸头', d:'点击头部 ｜ 预期：缩头害羞+爱心粒子+随机语音' },
+  { id:'TC-304', mod:'3xx 交互', title:'长按摸头', d:'按住头部 650ms ｜ 预期：同上，且与拖拽互斥' },
+  { id:'TC-305', mod:'3xx 交互', title:'点击身体反应', d:'点击身体 ｜ 预期：注意反应+星光粒子' },
+  { id:'TC-306', mod:'3xx 交互', title:'工具栏驻留', d:'鼠标停在工具栏/面板上 ｜ 预期：不消失；移开 ~0.3s 后淡出' },
+  { id:'TC-307', mod:'3xx 交互', title:'工具栏布局', d:'观察工具栏 ｜ 预期：纵向窄条贴人物右侧一指宽、底近脚踝、不遮身体' },
+  { id:'TC-401', mod:'4xx 语音识别', title:'开启语音对话', d:'点 🎤 ｜ 预期：聆听红点指示出现' },
+  { id:'TC-402', mod:'4xx 语音识别', title:'VAD 自动断句', d:'说一句停顿 ｜ 预期：~0.8s 自动提交，文本显示在聊天面板' },
+  { id:'TC-403', mod:'4xx 语音识别', title:'识别准确率', d:'说 5 句日常句（含中英混合）｜ 预期：基本准确无串字' },
+  { id:'TC-404', mod:'4xx 语音识别', title:'断句不截断', d:'中途换气再说完 ｜ 预期：完整句意不被截断' },
+  { id:'TC-405', mod:'4xx 语音识别', title:'语音离开', d:'说“去休息吧” ｜ 预期：告别离开变爱心挂件' },
+  { id:'TC-406', mod:'4xx 语音识别', title:'语音召回', d:'爱心态说“回来” ｜ 预期：return 动画回归' },
+  { id:'TC-501', mod:'5xx 对话', title:'文字对话基本盘', d:'💬 输入发送 ｜ 预期：人设口吻回复' },
+  { id:'TC-502', mod:'5xx 对话', title:'流式打字机', d:'发送后观察气泡 ｜ 预期：思考三点 → 逐字上屏 → 定格正文' },
+  { id:'TC-503', mod:'5xx 对话', title:'情绪与动作联动', d:'说夸奖/抱怨 ｜ 预期：相应表情+动作' },
+  { id:'TC-504', mod:'5xx 对话', title:'长回复完整', d:'“讲个长故事” ｜ 预期：完整不截断' },
+  { id:'TC-505', mod:'5xx 对话', title:'Markdown 渲染', d:'诱导加粗/列表/链接 ｜ 预期：正确渲染，链接跳浏览器' },
+  { id:'TC-506', mod:'5xx 对话', title:'多轮上下文', d:'先自我介绍几轮后再问“我叫什么” ｜ 预期：记得前文' },
+  { id:'TC-507', mod:'5xx 对话', title:'同问不双答', d:'同句发送两次 ｜ 预期：恰好一条回复气泡' },
+  { id:'TC-508', mod:'5xx 对话', title:'空回复防线', d:'连续快问 5~10 轮 ｜ 预期：无空白气泡' },
+  { id:'TC-509', mod:'5xx 对话', title:'意图换装', d:'说“换上水手服” ｜ 预期：确认回复+转圈换装' },
+  { id:'TC-510', mod:'5xx 对话', title:'历史持久化', d:'聊 2~3 轮 → 重启 → 开聊天面板 ｜ 预期：气泡自动回填' },
+  { id:'TC-601', mod:'6xx 合成与口型', title:'回复出声', d:'正常对话 ｜ 预期：自动语音播出（晓晓）' },
+  { id:'TC-602', mod:'6xx 合成与口型', title:'音量即时生效', d:'拖音量滑块保存 ｜ 预期：下一句立即生效' },
+  { id:'TC-603', mod:'6xx 合成与口型', title:'语速调节', d:'语速 +20% 保存 ｜ 预期：明显加快' },
+  { id:'TC-604', mod:'6xx 合成与口型', title:'音色切换', d:'换云健保存 ｜ 预期：立即变化' },
+  { id:'TC-605', mod:'6xx 合成与口型', title:'长文本逐句播放', d:'诱导长回复 ｜ 预期：逐句连续、顺序正确无长空档' },
+  { id:'TC-606', mod:'6xx 合成与口型', title:'口型同步', d:'说话时看嘴 ｜ 预期：开合与语音节奏同步' },
+  { id:'TC-607', mod:'6xx 合成与口型', title:'摸头语音', d:'摸头互动 ｜ 预期：撒娇语音清晰（音量联动）' },
+  { id:'TC-701', mod:'7xx 换装', title:'换装菜单', d:'点 👗 ｜ 预期：换装条出现头顶上方，5 套选项' },
+  { id:'TC-702', mod:'7xx 换装', title:'换装演出', d:'选一套 ｜ 预期：720°旋转+星光，中点换模' },
+  { id:'TC-703', mod:'7xx 换装', title:'五套全切换', d:'依次切 5 套 ｜ 预期：每套生效（无 VRM 时配色变体+提示）' },
+  { id:'TC-704', mod:'7xx 换装', title:'语音换装', d:'说“换上时尚装” ｜ 预期：意图→换装动画' },
+  { id:'TC-705', mod:'7xx 换装', title:'换装后状态', d:'完成后观察 ｜ 预期：站位/朝向/眨眼/眼神一切如常' },
+  { id:'TC-801', mod:'8xx UI 与设置', title:'聊天面板开合', d:'点 💬 ｜ 预期：开合平滑，输入/滚动/发送正常' },
+  { id:'TC-802', mod:'8xx UI 与设置', title:'设置面板完整可见', d:'点 ⚙️ ｜ 预期：面板整体在屏内，右上角 × 可见可点（超窗回归）' },
+  { id:'TC-803', mod:'8xx UI 与设置', title:'设置保存热重载', d:'改设置保存 ｜ 预期：toast 提示，即时生效' },
+  { id:'TC-804', mod:'8xx UI 与设置', title:'Key 配置', d:'改 API Key 保存 ｜ 预期：立即用新 Key 对话成功' },
+  { id:'TC-805', mod:'8xx UI 与设置', title:'错误提示', d:'断网发消息 ｜ 预期：中文错误红气泡，不崩溃' },
+  { id:'TC-806', mod:'8xx UI 与设置', title:'全局快捷键', d:'按 Ctrl+Alt+G ｜ 预期：隐藏/召回切换' },
+  { id:'TC-807', mod:'8xx UI 与设置', title:'FPS 角标', pend:true, d:'设置开角标 ｜ 预期：左下角绿字 ~60fps，&lt;50 变橙（<b>代码待部署</b>）' },
+  { id:'TC-808', mod:'8xx UI 与设置', title:'快捷键自定义', pend:true, d:'改 Ctrl+Alt+J 保存 ｜ 预期：生效+旧键失效；非法值→失败提示+原键保留（<b>代码待部署</b>）' },
+  { id:'TC-901', mod:'9xx 集成健壮', title:'离开→爱心→点回', d:'休息后点爱心 ｜ 预期：呼吸动画，点击 return 回归' },
+  { id:'TC-902', mod:'9xx 集成健壮', title:'唤醒无虚影', d:'休息→召回 ×3 ｜ 预期：每次完整纹理，无虚影阶段可见' },
+  { id:'TC-903', mod:'9xx 集成健壮', title:'快捷键与托盘一致', d:'快捷键隐藏→托盘唤醒 ｜ 预期：状态一致' },
+  { id:'TC-904', mod:'9xx 集成健壮', title:'长时挂机', d:'挂机 1 小时+ ｜ 预期：响应如常，内存无明显暴涨' },
+  { id:'TC-905', mod:'9xx 集成健壮', title:'副屏拖动', d:'拖到副屏再拖回 ｜ 预期：显示/工具栏/拖拽正常' },
+  { id:'TC-906', mod:'9xx 集成健壮', title:'退出清理', d:'托盘退出后查任务管理器 ｜ 预期：Electron+Python 全退，无孤儿进程' },
+  { id:'TC-907', mod:'9xx 集成健壮', title:'后端异常重启', d:'杀 pythonw → 等待 ｜ 预期：断线提示后 2.5s 重连恢复' },
+  { id:'TC-908', mod:'9xx 集成健壮', title:'断网韧性', d:'断网操作各功能 ｜ 预期：本地功能正常，对话报错明确，复网恢复' },
+  { id:'TC-909', mod:'9xx 集成健壮', title:'高频拖拽压力', d:'快速拖 10 秒 ｜ 预期：无卡顿错乱' },
+  { id:'TC-910', mod:'9xx 集成健壮', title:'休眠唤醒', d:'系统睡眠→唤醒 ｜ 预期：人物还在/可唤回，无白屏虚影' },
+  { id:'TC-911', mod:'9xx 集成健壮', title:'对话中拖动', d:'说话时拖动她 ｜ 预期：语音口型拖拽互不阻塞' },
+  { id:'TC-912', mod:'9xx 集成健壮', title:'组合场景', d:'对话→语音换装→休息→召回 ｜ 预期：状态机全链路无错乱' },
+];
+const MODS = ['1xx 启动与窗口','2xx 角色与动画','3xx 交互','4xx 语音识别','5xx 对话','6xx 合成与口型','7xx 换装','8xx UI 与设置','9xx 集成健壮'];
+const KEY = 'agirl-test-v1-';
+const stGet = (id) => localStorage.getItem(KEY + id) || '';
+const stSet = (id, v) => v ? localStorage.setItem(KEY + id, v) : localStorage.removeItem(KEY + id);
+const noteGet = (id) => localStorage.getItem(KEY + 'note-' + id) || '';
+const noteSet = (id, v) => v ? localStorage.setItem(KEY + 'note-' + id, v) : localStorage.removeItem(KEY + 'note-' + id);
+
+function render() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  let pass = 0, fail = 0, pend = 0;
+  for (const mod of MODS) {
+    const cases = CASES.filter(c => c.mod === mod);
+    const head = document.createElement('div'); head.className = 'mod-head';
+    const mp = cases.filter(c => stGet(c.id) === 'pass').length;
+    const mf = cases.filter(c => stGet(c.id) === 'fail').length;
+    const mc = cases.filter(c => c.pend).length;
+    head.innerHTML = `<h2>${mod}</h2><span class="stat">通过 ${mp} / 失败 ${mf} / 待测 ${cases.length - mp - mf}${mc ? '（含待部署 ' + mc + '）' : ''}</span>`;
+    board.appendChild(head);
+    for (const c of cases) {
+      const st = stGet(c.id);
+      const note = noteGet(c.id);
+      const el = document.createElement('div');
+      el.className = 'case ' + (st === 'pass' ? 'passed' : st === 'fail' ? 'failed' : '');
+      el.innerHTML = `
+        <span class="badge">${c.id}</span>
+        <div class="body">
+          <div class="title">${c.title}${c.pend ? '<span class="pend">⏳ 待部署</span>' : ''}</div>
+          <div class="desc">${c.d}</div>
+          ${note ? `<div class="note">❗ ${escapeHtml(note)}</div>` : ''}
+        </div>
+        <button class="st ${st}" data-id="${c.id}">${st === 'pass' ? '✓ 通过' : st === 'fail' ? '✗ 失败' : '待测'}</button>`;
+      board.appendChild(el);
+      if (st === 'pass') pass++; else if (st === 'fail') fail++;
+      if (c.pend) pend++;
+    }
+  }
+  const total = CASES.length;
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-pass').textContent = pass;
+  document.getElementById('s-fail').textContent = fail;
+  document.getElementById('s-todo').textContent = total - pass - fail;
+  document.getElementById('s-pend').textContent = pend;
+  document.getElementById('bar-p').style.width = (pass / total * 100) + '%';
+  document.getElementById('bar-f').style.width = (fail / total * 100) + '%';
+}
+
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+document.getElementById('board').addEventListener('click', (e) => {
+  const btn = e.target.closest('.st');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const cur = stGet(id);
+  const next = cur === '' ? 'pass' : cur === 'pass' ? 'fail' : '';
+  if (next === 'fail') {
+    const note = prompt(`【${id} 测试失败】请描述一句现象（会显示在看板上）：`, noteGet(id)) || '';
+    noteSet(id, note || '未填写备注');
+  } else {
+    noteSet(id, '');
+  }
+  stSet(id, next);
+  render();
+});
+
+document.getElementById('btn-copy').addEventListener('click', () => {
+  const lines = CASES.map(c => {
+    const st = stGet(c.id);
+    const mark = st === 'pass' ? '✅' : st === 'fail' ? '❌' : '⬜';
+    const note = st === 'fail' ? `（${noteGet(c.id)}）` : '';
+    return `${mark} ${c.id} ${c.title}${note}`;
+  });
+  const ps = CASES.filter(c => stGet(c.id) === 'pass').length;
+  const fs = CASES.filter(c => stGet(c.id) === 'fail').length;
+  const text = `测试结果（${ps} 通过 / ${fs} 失败 / ${CASES.length - ps - fs} 待测）\n` + lines.join('\n');
+  const done = () => alert('已复制，粘贴给助手即可回写 md');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else { fallbackCopy(text, done); }
+});
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); }
+  catch { prompt('复制按钮不可用，请手动全选复制：', text); }
+  ta.remove();
+}
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (confirm('确认清空全部勾选与备注？')) { CASES.forEach(c => { stSet(c.id, ''); noteSet(c.id, ''); }); render(); }
+});
+
+let expanded = true;
+document.getElementById('btn-expand').addEventListener('click', () => {
+  expanded = !expanded;
+  document.querySelectorAll('.mod-head + .case, #board .case').forEach(el => {
+    if (el.classList.contains('case')) el.style.display = expanded ? '' : 'none';
+  });
+});
+
+render();
+</script>
+</body>
+</html>
