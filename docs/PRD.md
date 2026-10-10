@@ -164,7 +164,7 @@
 | 编号 | 需求 | 状态 | 验证 |
 |---|---|---|---|
 | FR-701 | Edge-TTS Provider（晓晓默认，支持晓伊/云健/晓涵/晓梦） | ✅ | **实测**合成 28KB mp3 |
-| FR-702 | 回复按句切分（。！？；\n）流式合成逐句下发，降低首音延迟 | ✅ | server.py；**首句提前合成升级**（10-11 Phase 24）：LLM 流式期间非末句并行合成（core/stream_tts.py），早期句中性语速、末句带情绪 |
+| FR-702 | 回复按句切分（。！？；\n）流式合成逐句下发，降低首音延迟 | ✅ | server.py；**首句提前合成升级**（10-11 Phase 24）：LLM 流式期间非末句并行合成（core/stream_tts.py），早期句中性语速、末句带情绪；**空回复流式重试**（Phase 25）：重试轮纯文本流同样边生成边出声（tracker json/plain 自适应） |
 | FR-703 | TTS Provider 抽象架构（base.py 接口 + manager 注册） | ✅ | 架构完成 |
 | FR-704 | 音色失效自动回退默认音色 | ✅ | edge_provider.py |
 | FR-705 | Azure TTS Provider | ⬜ | 待开发（接口已预留） |
