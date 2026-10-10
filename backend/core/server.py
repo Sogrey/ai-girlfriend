@@ -12,19 +12,21 @@ Renderer -> Backend:
 Backend -> Renderer:
   {type:'stt_result', text}
   {type:'ai_response', reply, emotion, action, costume}
-  {type:'tts_audio', seq, final, data: <base64 mp3>}
+  {type:'tts_audio', seq, final, data: <base64 mp3>}   # may arrive BEFORE
+      ai_response: non-last sentences are synthesized while the LLM is
+      still streaming (first-sentence-early TTS, see core/stream_tts.py)
   {type:'status', stt_ready, stt_device, stt_error, llm_provider, llm_health, tts_provider}
   {type:'error', code, message}
 """
 import asyncio
 import base64
 import json
-import re
 import logging
 
 import websockets
 
 from core.settings import load_config, load_prompt
+from core.stream_tts import ReplySentenceTracker, split_reply
 from llm.manager import LLMManager
 from stt.whisper_engine import WhisperEngine
 from tts.manager import TTSManager
@@ -83,14 +85,6 @@ class BackendServer:
             'llm_provider': self.llm.provider_name,
             'tts_provider': self.tts.provider_name,
         }
-
-    @staticmethod
-    def split_sentences(text):
-        parts = re.split(r'(?<=[。！？!?；;\n])', text)
-        out = [p.strip() for p in parts if p and len(p.strip()) > 1]
-        if not out and text.strip():
-            out = [text.strip()]
-        return out[:6]
 
     # ---------------- message handling ----------------
 
@@ -153,23 +147,24 @@ class BackendServer:
     async def handle_chat(self, ws, text, mid):
         if not text.strip():
             return
+        tracker = ReplySentenceTracker()
+        queue = asyncio.Queue()
+        worker = asyncio.ensure_future(self._tts_worker(ws, queue))
         try:
-            # stream_partial: push raw partial text to the UI so the user
-            # sees a typewriter effect instead of a blank wait.
-            async def push_partial(partial):
-                await self.send(ws, {'type': 'llm_partial', 'text': partial})
-            def on_delta(partial):
-                asyncio.ensure_future(push_partial(partial))
+            on_delta = self._stream_sink(ws, tracker, queue)
             result = await self.conv.chat_stream(text, source='text', on_delta=on_delta)
         except Exception as e:
             logger.error('LLM error: %s', e)
+            queue.put_nowait(None)
+            await worker
             await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
             return
         resp = dict(result)
         resp['type'] = 'ai_response'
         resp['_id'] = mid
         await self.send(ws, resp)
-        await self.speak_reply(ws, result['reply'], result.get('emotion'))
+        await self._flush_tts(queue, tracker, result)
+        await worker
 
     async def handle_audio(self, ws, b64, fmt, mid):
         try:
@@ -191,21 +186,24 @@ class BackendServer:
             return
         await self.send(ws, {'type': 'stt_result', 'text': text, '_id': mid})
         if text.strip():
+            tracker = ReplySentenceTracker()
+            queue = asyncio.Queue()
+            worker = asyncio.ensure_future(self._tts_worker(ws, queue))
             try:
-                async def push_partial(partial):
-                    await self.send(ws, {'type': 'llm_partial', 'text': partial})
-                def on_delta(partial):
-                    asyncio.ensure_future(push_partial(partial))
+                on_delta = self._stream_sink(ws, tracker, queue)
                 result = await self.conv.chat_stream(text, source='voice', on_delta=on_delta)
             except Exception as e:
                 logger.error('LLM error: %s', e)
+                queue.put_nowait(None)
+                await worker
                 await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
                 return
             resp = dict(result)
             resp['type'] = 'ai_response'
             resp['_id'] = mid
             await self.send(ws, resp)
-            await self.speak_reply(ws, result['reply'], result.get('emotion'))
+            await self._flush_tts(queue, tracker, result)
+            await worker
         else:
             # nothing said — gentle ignore
             pass
@@ -219,7 +217,7 @@ class BackendServer:
     async def speak_reply(self, ws, reply_text, emotion=None):
         """Sentence-split a reply, synthesize each with TTS, stream mp3 chunks.
         `emotion` nudges the speaking rate (see tts.manager.EMOTION_RATE_DELTA)."""
-        sentences = self.split_sentences(reply_text)
+        sentences = split_reply(reply_text)
         total = len(sentences)
         for i, s in enumerate(sentences):
             final = (i == total - 1)
@@ -235,6 +233,77 @@ class BackendServer:
                     await self.send(ws, {'type': 'tts_audio', 'seq': i, 'final': True, 'data': ''})
                 else:
                     await self.send(ws, {'type': 'error', 'code': 'tts', 'message': '语音合成失败: ' + str(e)})
+
+    # ---------------- streaming TTS (first-sentence-early) ----------------
+
+    def _stream_sink(self, ws, tracker, queue):
+        """on_delta callback for chat_stream: typewriter push to the UI +
+        early-TTS queueing for sentences that are provably not the last
+        one. Early sentences are neutral-rate: emotion is only known
+        after the whole JSON is parsed (the flush shapes the remainder)."""
+        async def push_partial(partial):
+            await self.send(ws, {'type': 'llm_partial', 'text': partial})
+        def on_delta(partial):
+            asyncio.ensure_future(push_partial(partial))
+            for sentence in tracker.feed(partial):
+                logger.info('early-tts: sentence %d queued while streaming: %r',
+                            len(tracker.emitted), sentence[:30])
+                queue.put_nowait((sentence, None, False))
+        return on_delta
+
+    async def _flush_tts(self, queue, tracker, result):
+        """Queue the remaining sentences once the full reply is known
+        (emotion-shaped rate), then end the worker sequence."""
+        remainder, consistent = tracker.flush(result['reply'])
+        emotion = result.get('emotion')
+        if consistent:
+            logger.info('early-tts: %d early / %d remainder (emotion=%s)',
+                        len(tracker.emitted), len(remainder), emotion)
+            for i, s in enumerate(remainder):
+                queue.put_nowait((s, emotion, i == len(remainder) - 1))
+        else:
+            # malformed/truncated stream (or empty-reply retry rewrote it):
+            # early sentences were spoken from best-effort text that
+            # disagrees with the final reply — drop the remainder rather
+            # than replay or skip words.
+            logger.warning('early-tts: prefix inconsistent with final reply, remainder dropped')
+        queue.put_nowait(None)
+
+    async def _tts_worker(self, ws, queue):
+        """Sequential TTS synth+send per request: queue order == seq order.
+        The final flag comes from the enqueuer (_flush_tts knows the
+        total); if the stream aborts mid-way (LLM error / dropped
+        remainder) the worker closes the sequence with an empty final
+        chunk so the renderer is never left waiting for audio."""
+        seq = 0
+        sent_any = False
+        sent_final = False
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            sentence, emotion, final = item
+            try:
+                audio = await self.tts.synthesize(sentence, emotion=emotion)
+                b64 = base64.b64encode(audio).decode('ascii')
+                await self.send(ws, {
+                    'type': 'tts_audio', 'seq': seq, 'final': final, 'format': 'mp3', 'data': b64,
+                })
+                sent_any = True
+                if final:
+                    sent_final = True
+            except Exception as e:
+                logger.error('TTS error on sentence %d: %s', seq, e)
+                if final:
+                    await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
+                    sent_any = True
+                    sent_final = True
+                else:
+                    await self.send(ws, {'type': 'error', 'code': 'tts', 'message': '语音合成失败: ' + str(e)})
+            seq += 1
+        if sent_any and not sent_final:
+            # aborted before a final chunk went out — close the sequence
+            await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
 
     # ---------------- entry ----------------
 
