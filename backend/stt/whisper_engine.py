@@ -129,11 +129,16 @@ class WhisperEngine:
         if changed and self.model is not None:
             self.load()
 
-    def transcribe(self, audio_bytes, fmt='webm'):
+    def transcribe(self, audio_bytes, fmt='webm', vad=None):
+        """Transcribe audio bytes -> text.
+        `vad`: None = config default (final utterances); False = no VAD
+        (live partials: silero would trim mid-sentence pauses and the
+        still-open tail, making the previewed text jump backwards)."""
         if not self.ready:
             raise RuntimeError('语音识别引擎未就绪: ' + (self.error or 'loading'))
         lang = self.config.get('language', 'zh')
-        vad = bool(self.config.get('vad_enabled', True))
+        if vad is None:
+            vad = bool(self.config.get('vad_enabled', True))
         buf = io.BytesIO(audio_bytes)
         # PyAV needs a hint for webm container without filename
         buf.name = 'audio.' + (fmt or 'webm')

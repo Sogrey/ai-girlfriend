@@ -4,12 +4,15 @@
 Protocol (all JSON):
 Renderer -> Backend:
   {type:'user_message', text}
-  {type:'transcribe_audio', data: <base64 webm/opus>, format:'webm'}
+  {type:'transcribe_partial', data: <base64 webm/opus>, format:'webm'}   # live partial while speaking
+  {type:'transcribe_audio', data: <base64 webm/opus>, format:'webm'}    # final utterance -> STT -> LLM
   {type:'speak_line', text, emotion}          # local reaction lines (head pat etc.)
   {type:'reload_config'}
   {type:'ping'}            -> {type:'pong'}
 
 Backend -> Renderer:
+  {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
+  {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
   {type:'stt_result', text}
   {type:'ai_response', reply, emotion, action, costume}
   {type:'tts_audio', seq, final, data: <base64 mp3>}   # may arrive BEFORE
@@ -48,6 +51,13 @@ class BackendServer:
         self.conv = ConversationManager(self.config, self.llm, self.system_prompt)
         self.clients = set()
         self._stt_started = False
+        # streaming STT: one transcription at a time (model is not thread-safe,
+        # GPU is a single lane), latest-partial-wins coalescing, epoch drops
+        # partials superseded by a final transcription
+        self._stt_lock = asyncio.Lock()
+        self._pending_partial = None
+        self._partial_task = None
+        self._stt_epoch = 0
 
     # ---------------- lifecycle ----------------
 
@@ -137,6 +147,8 @@ class BackendServer:
             await self.send(ws, {'type': 'memory_cleared', '_id': mid})
         elif mtype == 'user_message':
             await self.handle_chat(ws, msg.get('text', ''), mid)
+        elif mtype == 'transcribe_partial':
+            await self.handle_partial(ws, msg.get('data', ''), msg.get('format', 'webm'), mid)
         elif mtype == 'transcribe_audio':
             await self.handle_audio(ws, msg.get('data', ''), msg.get('format', 'webm'), mid)
         elif mtype == 'speak_line':
@@ -179,7 +191,16 @@ class BackendServer:
                     await asyncio.sleep(0.5)
                     if self.stt.ready or self.stt.error:
                         break
-            text = self.stt.transcribe(audio, fmt)
+            # final utterance: bump the epoch so in-flight/queued partial
+            # transcriptions are dropped instead of arriving stale, and take
+            # the lock (a partial currently transcribing delays us only by
+            # its own short run). Transcribe in an executor so llm_partial /
+            # tts_audio pushes keep flowing while whisper runs.
+            self._stt_epoch += 1
+            self._pending_partial = None
+            loop = asyncio.get_event_loop()
+            async with self._stt_lock:
+                text = await loop.run_in_executor(None, lambda a=audio, f=fmt: self.stt.transcribe(a, f))
         except Exception as e:
             logger.error('STT error: %s', e)
             await self.send(ws, {'type': 'error', 'code': 'stt', 'message': '语音识别失败: ' + str(e), '_id': mid})
@@ -207,6 +228,44 @@ class BackendServer:
         else:
             # nothing said — gentle ignore
             pass
+
+    # ---------------- streaming STT (live partials) ----------------
+
+    async def handle_partial(self, ws, b64, fmt, mid):
+        """Live partial transcription while the user is still speaking.
+        Best-effort: latest-partial-wins (a slow transcription never makes
+        whisper fall behind — newer buffers just overwrite the slot)."""
+        if not b64 or not self.stt.ready:
+            return
+        self._pending_partial = (ws, b64, fmt)
+        if self._partial_task is None or self._partial_task.done():
+            self._partial_task = asyncio.ensure_future(self._partial_worker())
+
+    async def _partial_worker(self):
+        """Sequentially transcribe the LATEST pending partial buffer.
+        Epoch checks drop partials superseded by a final transcription
+        (both before taking the lock and before sending). VAD is off for
+        partials: silero would trim mid-sentence pauses and the still-open
+        tail, making the previewed text jump backwards."""
+        loop = asyncio.get_event_loop()
+        while self._pending_partial:
+            job = self._pending_partial
+            self._pending_partial = None
+            ws, b64, fmt = job
+            epoch = self._stt_epoch
+            try:
+                audio = base64.b64decode(b64)
+                if len(audio) > MAX_AUDIO_MB * 1024 * 1024:
+                    continue
+                async with self._stt_lock:
+                    if epoch != self._stt_epoch:
+                        continue   # a final took over while we waited
+                    text = await loop.run_in_executor(
+                        None, lambda a=audio, f=fmt: self.stt.transcribe(a, f, vad=False))
+                if epoch == self._stt_epoch and text:
+                    await self.send(ws, {'type': 'stt_partial', 'text': text})
+            except Exception as e:
+                logger.warning('partial transcribe failed (ignored): %s', e)
 
     async def handle_speak_line(self, ws, text, emotion=None, mid=None):
         """Speak a local (non-LLM) line, e.g. random head-pat reactions."""

@@ -72,7 +72,11 @@ export function initChatPanel({ backend }) {
   sendEl = document.getElementById('chat-send');
 
   sendEl.addEventListener('click', send);
-  inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+  inputEl.addEventListener('keydown', (e) => {
+    // user starts editing the live voice preview -> stop stomping their input
+    if (voicePreviewOn && e.key !== 'Enter') voicePreviewOn = false;
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+  });
 
   // long-term memory viewer: list what she remembers about the user
   document.getElementById('chat-memory')?.addEventListener('click', async () => {
@@ -100,7 +104,8 @@ export function initChatPanel({ backend }) {
 
   bus.on('backend:ai_response', (msg) => { finalizeStream(msg.reply, msg.emotion); });
   bus.on('backend:llm_partial', (msg) => showStreaming(msg.text));
-  bus.on('backend:stt_result', (msg) => addUser(msg.text, 'voice'));
+  bus.on('backend:stt_partial', (msg) => showVoicePreview(msg.text));
+  bus.on('backend:stt_result', (msg) => { clearVoicePreview(); addUser(msg.text, 'voice'); });
   bus.on('backend:error', () => removeThinking());
   bus.on('backend:tts_audio', () => {
     // first TTS chunk arrived -> the reply is complete; stop the stream view
@@ -177,8 +182,31 @@ function extractPartialReply(raw) {
   return s;
 }
 
+// ---- live voice preview (streaming STT) ----
+// While the user is still speaking, recognized-so-far text is previewed in
+// the input box (italic gray); the final stt_result replaces it with the
+// voice bubble. Any user keystroke stops the preview from stomping input.
+let voicePreviewOn = false;
+
+function showVoicePreview(text) {
+  if (!text) return;
+  // don't stomp text the user is typing
+  if (!voicePreviewOn && inputEl.value.trim()) return;
+  voicePreviewOn = true;
+  inputEl.value = text + ' …';
+  inputEl.classList.add('voice-preview');
+}
+
+function clearVoicePreview() {
+  if (!voicePreviewOn) return;
+  voicePreviewOn = false;
+  inputEl.value = '';
+  inputEl.classList.remove('voice-preview');
+}
+
 function send() {
-  const text = inputEl.value.trim();
+  let text = inputEl.value.trim();
+  if (voicePreviewOn) { voicePreviewOn = false; text = text.replace(/…$/, '').trim(); inputEl.classList.remove('voice-preview'); }
   if (!text) return;
   inputEl.value = '';
   addUser(text, 'me');

@@ -116,6 +116,7 @@ html,body {
 .chat-input-row { display:flex; padding:10px; gap:8px; border-top:1px solid rgba(255,255,255,.08); }
 .chat-input-row input { flex:1; padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:rgba(0,0,0,.3); color:#fff; font-size:14px; }
 .chat-input-row input:focus { outline:none; border-color:rgba(255,120,170,.5); }
+.chat-input-row input.voice-preview { color:rgba(255,255,255,.55); font-style:italic; }
 .chat-input-row button { padding:8px 16px; border:none; border-radius:10px; cursor:pointer; background:rgba(255,120,170,.5); color:#fff; font-size:14px; }
 .chat-input-row button:hover { background:rgba(255,120,170,.7); }
 #chat-memory { width:38px; font-size:15px; padding:6px 0; }

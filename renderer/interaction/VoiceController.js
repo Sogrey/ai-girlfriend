@@ -18,6 +18,7 @@ export class VoiceController {
     this.srcNode = null;
     this._raf = null;
     this._lastRms = 0;
+    this._lastPartialAt = 0;
     this.minSpeechMs = opts.minSpeechMs || 250;
     this.silenceMs = opts.silenceMs || 800;
   }
@@ -66,6 +67,7 @@ export class VoiceController {
 
   stop() {
     this.active = false;
+    this._lastPartialAt = 0;
     this._onStatus('off');
     try { this.recorder?.stop(); } catch {}
     try { this.stream?.getTracks().forEach(t => t.stop()); } catch {}
@@ -99,11 +101,19 @@ export class VoiceController {
       if (rms > threshold) {
         this.speechActive = true;
         this.speechStartTime = now;
+        this._lastPartialAt = 0;   // new utterance: restart partial cadence
         // keep ~2s of pre-roll
         this.speechStartIdx = Math.max(0, this.chunks.length - 8);
         this._onStatus('speech');
       }
     } else {
+      // live partial STT: ship the buffer-so-far every ~1.2s while speaking
+      // (needs >=1s of speech chunks; otherwise partials fire too early)
+      if (now - (this._lastPartialAt || 0) >= 1200 &&
+          this.chunks.length - this.speechStartIdx >= 4) {
+        this._lastPartialAt = now;
+        this._sendPartial();
+      }
       if (rms < Math.max(this.noiseFloor * 2.0, 0.008)) {
         if (!this.speechEndTime) this.speechEndTime = now;
         if (now - this.speechEndTime >= this.silenceMs &&
@@ -156,6 +166,20 @@ export class VoiceController {
       try { rec.stop(); } catch { resolve(); }
     });
     this._sending = false;
+  }
+
+  async _sendPartial() {
+    // Best-effort live transcription while still recording. The merged
+    // mid-recording webm blob decodes up to the last complete cluster, so
+    // the preview trails the speech by at most ~1s — fine for a preview.
+    if (this._sending || !this.recorder || this.recorder.state !== 'recording') return;
+    try {
+      const chunks = this.chunks.slice(this.speechStartIdx);
+      if (!chunks.length) return;
+      const blob = new Blob(chunks, { type: this.recorder.mimeType || 'audio/webm' });
+      const b64 = await blobToBase64(blob);
+      window.__backend?.send({ type: 'transcribe_partial', data: b64, format: 'webm' });
+    } catch { /* partials are best-effort */ }
   }
 
   get rms() { return this._lastRms; }
