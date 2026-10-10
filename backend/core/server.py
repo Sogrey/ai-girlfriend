@@ -146,7 +146,7 @@ class BackendServer:
         elif mtype == 'transcribe_audio':
             await self.handle_audio(ws, msg.get('data', ''), msg.get('format', 'webm'), mid)
         elif mtype == 'speak_line':
-            await self.handle_speak_line(ws, msg.get('text', ''), mid)
+            await self.handle_speak_line(ws, msg.get('text', ''), msg.get('emotion'), mid)
         else:
             logger.warning('unknown message type: %s', mtype)
 
@@ -169,7 +169,7 @@ class BackendServer:
         resp['type'] = 'ai_response'
         resp['_id'] = mid
         await self.send(ws, resp)
-        await self.speak_reply(ws, result['reply'])
+        await self.speak_reply(ws, result['reply'], result.get('emotion'))
 
     async def handle_audio(self, ws, b64, fmt, mid):
         try:
@@ -205,25 +205,26 @@ class BackendServer:
             resp['type'] = 'ai_response'
             resp['_id'] = mid
             await self.send(ws, resp)
-            await self.speak_reply(ws, result['reply'])
+            await self.speak_reply(ws, result['reply'], result.get('emotion'))
         else:
             # nothing said — gentle ignore
             pass
 
-    async def handle_speak_line(self, ws, text, mid):
+    async def handle_speak_line(self, ws, text, emotion=None, mid=None):
         """Speak a local (non-LLM) line, e.g. random head-pat reactions."""
         if not text.strip():
             return
-        await self.speak_reply(ws, text)
+        await self.speak_reply(ws, text, emotion)
 
-    async def speak_reply(self, ws, reply_text):
-        """Sentence-split a reply, synthesize each with TTS, stream mp3 chunks."""
+    async def speak_reply(self, ws, reply_text, emotion=None):
+        """Sentence-split a reply, synthesize each with TTS, stream mp3 chunks.
+        `emotion` nudges the speaking rate (see tts.manager.EMOTION_RATE_DELTA)."""
         sentences = self.split_sentences(reply_text)
         total = len(sentences)
         for i, s in enumerate(sentences):
             final = (i == total - 1)
             try:
-                audio = await self.tts.synthesize(s)
+                audio = await self.tts.synthesize(s, emotion=emotion)
                 b64 = base64.b64encode(audio).decode('ascii')
                 await self.send(ws, {
                     'type': 'tts_audio', 'seq': i, 'final': final, 'format': 'mp3', 'data': b64,

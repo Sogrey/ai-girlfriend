@@ -5,7 +5,8 @@ import re
 
 VALID_ACTIONS = {
     'idle', 'wave', 'leave', 'return', 'change_costume', 'comfort',
-    'head_pat', 'jump', 'dance', 'think', 'nod', 'blow_kiss', 'stretch',
+    'head_pat', 'jump', 'dance', 'think', 'nod', 'shake_head', 'blow_kiss',
+    'stretch', 'greet', 'spin',
 }
 VALID_EMOTIONS = {'happy', 'shy', 'angry', 'sad', 'surprised', 'caring', 'neutral'}
 VALID_COSTUMES = {'casual', 'school', 'stylish', 'gothic', 'seed'}
@@ -17,11 +18,17 @@ MEMORY_MAX_LEN = 120
 # maps some natural words the LLM may emit to canonical actions
 ACTION_ALIASES = {
     'pat': 'head_pat', 'headpat': 'head_pat', 'happy': 'wave',
-    'greet': 'wave', 'goodbye': 'leave', 'sleep': 'leave', 'rest': 'leave',
+    'goodbye': 'leave', 'sleep': 'leave', 'rest': 'leave',
     'comeback': 'return', 'come_back': 'return', 'costume': 'change_costume',
     'changecostume': 'change_costume', 'cheer': 'jump',
     'kiss': 'blow_kiss', 'blowkiss': 'blow_kiss', 'flying_kiss': 'blow_kiss',
     'yawn': 'stretch', 'lazy': 'stretch',
+    'shake': 'shake_head', 'shakehead': 'shake_head', 'headshake': 'shake_head',
+    'no': 'shake_head', 'disagree': 'shake_head',
+    'hello': 'greet', 'hi': 'greet', 'say_hi': 'greet', 'sayhi': 'greet',
+    'greeting': 'greet',
+    'twirl': 'spin', 'turn_around': 'spin', 'turnaround': 'spin',
+    'circle': 'spin',
 }
 EMOTION_ALIASES = {
     'joy': 'happy', 'excited': 'happy', 'love': 'happy', 'embarrassed': 'shy',

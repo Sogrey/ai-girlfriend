@@ -14,6 +14,16 @@ const HEADPAT_LINES = [
   '你今天怎么这么喜欢逗我。',
 ];
 
+// Randomized double-click spin voice lines (spoken via speak_line; never
+// used for LLM-triggered spins, which already carry their own reply + TTS).
+const SPIN_LINES = [
+  '哇，转晕啦。',
+  '嘿嘿，我转得快不快？',
+  '再来一个？看好咯。',
+  '呼——有点小头晕。',
+  '转圈这种事，我最拿手了。',
+];
+
 // Central dispatcher: maps LLM / UI / tray intents into animation + emotion
 // + system actions. All action names live here as the single source of truth.
 export class ActionDispatcher {
@@ -88,6 +98,30 @@ export class ActionDispatcher {
       case 'stretch':
         anim.play('stretch', { dur: ACTION_DURATIONS.stretch });
         break;
+      case 'shake_head':
+        anim.play('shake_head', { dur: ACTION_DURATIONS.shake_head });
+        break;
+      case 'greet':
+        this.emotion.set('happy', { hold: 4 });
+        anim.play('greet', { dur: ACTION_DURATIONS.greet });
+        break;
+      case 'spin': {
+        this.emotion.set('happy', { hold: 3 });
+        anim.play('spin', { dur: ACTION_DURATIONS.spin });
+        // sparkle trail while she twirls
+        let sn = 0;
+        const siv = setInterval(() => {
+          if (sn++ > 9) { clearInterval(siv); return; }
+          this.particles.spawnStars(this.avatar.chestWorldPos(), 4, { life: 1.0 });
+        }, 150);
+        // double-click interaction gets an extra cute spoken line
+        // (LLM-triggered spins already have their own reply + TTS)
+        if (payload && payload.source === 'dblclick') {
+          const line = SPIN_LINES[Math.floor(Math.random() * SPIN_LINES.length)];
+          this.backend.send({ type: 'speak_line', text: line, emotion: 'happy' });
+        }
+        break;
+      }
       case 'head_pat': {
         this.emotion.set('shy', { hold: 3.5 });
         anim.play('head_pat', { dur: ACTION_DURATIONS.head_pat });

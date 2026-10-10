@@ -304,6 +304,58 @@ const ACTIONS = {
       S.posY = up * 0.015; // a tiny lift on the tiptoe stretch
     },
   },
+  shake_head: {
+    dur: 1.4,
+    fn(u, t, P, S) {
+      // mirror of `nod`: 2.5 quick left-right cycles on the Y axis (face
+      // turn). Y reads visually weaker than nod's X dip, so the amplitude
+      // is larger. Envelope eases in/out like nod.
+      const n = Math.sin(u * Math.PI * 5);
+      const env = Math.sin(u * Math.PI);
+      set(P, 'head', 0.03, n * 0.26 * env, 0);
+      set(P, 'neck', 0.01, n * 0.09 * env, 0);
+    },
+  },
+  greet: {
+    dur: 3.0,
+    fn(u, t, P, S) {
+      // Greeting combo: cheerful palm-forward wave + two light bounces,
+      // left hand settles on the hip for a cheeky hello.
+      const ws = Math.sin(u * Math.PI);      // wave envelope
+      const osc = Math.sin(u * TAU * 2.5);   // hand wiggle
+      const hop = Math.abs(Math.sin(u * Math.PI * 2)) * ws;
+      S.posY = hop * 0.09;
+      // right arm: raised beside the head, palm toward viewer (wave's
+      // geometry-checked path), blended from the resting pose
+      set(P, 'rightUpperArm', -0.35 * ws, -0.18 * ws, 0.35 * ws + 1.32 * (1 - ws));
+      set(P, 'rightLowerArm', -0.95 * ws - 0.06 * (1 - ws), 0.12 * ws, 0.12 * ws + osc * 0.12 * ws + 0.12 * (1 - ws));
+      set(P, 'rightHand', -1.5 * ws, 0, 0.1);
+      // left arm: resting -> light akimbo (arm values borrowed from `angry`)
+      set(P, 'leftUpperArm', 0.08 * (1 - ws) + 0.15 * ws, 0.35 * ws, -1.32 * (1 - ws) - 0.4 * ws);
+      set(P, 'leftLowerArm', -0.06 * (1 - ws) - 0.5 * ws, 0.18 * (1 - ws) - 0.3 * ws, -0.12 * (1 - ws) - 0.5 * ws);
+      // head tilts a touch toward the waving side
+      set(P, 'head', 0, -0.1 * ws, -0.03 * ws);
+      set(P, 'neck', 0, -0.04 * ws, 0);
+    },
+  },
+  spin: {
+    dur: 1.6,
+    fn(u, t, P, S) {
+      // playful 360° twirl (same spinY mechanism as change_costume) with
+      // arms out, a small lift and a carefree head tilt
+      set(P, 'leftUpperArm', 0.05, 0, -0.5);
+      set(P, 'rightUpperArm', 0.05, 0, 0.5);
+      set(P, 'leftLowerArm', -0.2, 0, -0.3);
+      set(P, 'rightLowerArm', -0.2, 0, 0.3);
+      set(P, 'leftHand', 0, 0, -0.2);
+      set(P, 'rightHand', 0, 0, 0.2);
+      set(P, 'head', 0.03, Math.sin(u * Math.PI) * 0.08, -0.05);
+      set(P, 'hips', 0, Math.sin(u * Math.PI * 2) * 0.04, 0);
+      S.posY = Math.sin(u * Math.PI) * 0.06;
+      S.spinY = easeInOut(u) * TAU; // full twirl, ends facing camera
+      if (u >= 1) S.spinY = 0;
+    },
+  },
 };
 
 export class AnimationController {

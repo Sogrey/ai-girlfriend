@@ -25,6 +25,8 @@ export class MouseInteractionController {
     // drag state: track global mouse for window movement
     this._dragStartGlobal = null;
     this._dragWindowStart = null; // {x, y} window position at drag start
+    // double-click detection: { t, x, y } of the last body click
+    this._lastBodyClick = null;
 
     window.desktop?.onGlobalMouse?.((pos) => {
       this.mouseGlobal = { x: pos.x, y: pos.y };
@@ -202,7 +204,18 @@ export class MouseInteractionController {
         if (r.isHead) {
           bus.emit('action:request', { action: 'head_pat', source: 'click' });
         } else {
-          bus.emit('action:request', { action: 'body_click', source: 'click' });
+          // double-click on the body -> playful spin; single click -> small
+          // attention reaction. Second click must land within 400ms and 50px.
+          const now = performance.now();
+          const lc = this._lastBodyClick;
+          const isDbl = lc && (now - lc.t) < 400 &&
+            Math.hypot(e.clientX - lc.x, e.clientY - lc.y) < 50;
+          this._lastBodyClick = isDbl ? null : { t: now, x: e.clientX, y: e.clientY };
+          if (isDbl) {
+            bus.emit('action:request', { action: 'spin', payload: { source: 'dblclick' } });
+          } else {
+            bus.emit('action:request', { action: 'body_click', source: 'click' });
+          }
         }
       }
     }
