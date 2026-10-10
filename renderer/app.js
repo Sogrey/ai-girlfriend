@@ -220,8 +220,9 @@ async function boot() {
   console.log('AI Girlfriend boot complete.');
 
   // Debug/test bridge: exposes live instances for CDP-based automated tests
-  // (bone sampling, animation state checks). Harmless in production.
-  window.__agf = { animation, avatar, dispatcher, lipsync, eye, emotion, particles, costume };
+  // (bone sampling, animation state checks, interaction hit-tests).
+  // Harmless in production.
+  window.__agf = { animation, avatar, dispatcher, lipsync, eye, emotion, particles, costume, mouse };
 }
 
 window.addEventListener('error', (e) => show('运行时错误: ' + (e.error?.message || e.message), 'error', 5000));

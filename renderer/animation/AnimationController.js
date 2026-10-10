@@ -241,9 +241,9 @@ const ACTIONS = {
       set(P, 'leftLowerArm', -0.2, 0, -0.3);
       set(P, 'rightLowerArm', -0.2, 0, 0.3);
       set(P, 'head', 0.02, 0, -0.04);
-      S.spinY = easeInOut(u) * TAU; // full 360 twirl
-      // Ensure we always end facing camera (spinY=0 ≡ 2π≡0 visually)
-      if (u >= 1) S.spinY = 0;
+      // full 360 twirl; ends holding 2π (≡ facing camera). Leftover chase
+      // lag is unwound by the idle spin normalization in update().
+      S.spinY = easeInOut(u) * TAU;
     },
   },
   nod: {
@@ -352,8 +352,11 @@ const ACTIONS = {
       set(P, 'head', 0.03, Math.sin(u * Math.PI) * 0.08, -0.05);
       set(P, 'hips', 0, Math.sin(u * Math.PI * 2) * 0.04, 0);
       S.posY = Math.sin(u * Math.PI) * 0.06;
-      S.spinY = easeInOut(u) * TAU; // full twirl, ends facing camera
-      if (u >= 1) S.spinY = 0;
+      // full twirl over the first 75%, then HOLD the target at 2π so the
+      // pose damping can catch up before the action ends (a moving target
+      // always lags the chase; residual is unwound in update()'s idle
+      // spin normalization)
+      S.spinY = easeInOut(Math.min(u / 0.75, 1)) * TAU;
     },
   },
 };
@@ -423,6 +426,17 @@ export class AnimationController {
     const talkTarget = (this._talking && this.state === 'idle') ? 1 : 0;
     this._talkA = lerp(this._talkA, talkTarget, 1 - Math.exp(-4 * dt));
     if (this._talkA > 0.02) talkPose(this.t, P, S, this._talkA);
+
+    // unwind leftover whole-body spin while idle: the damping chase always
+    // lags a moving spin target, so after a twirl _spinY is close to (but
+    // not exactly) a full turn. Decay toward the nearest 2π multiple and
+    // snap to 0 (≡ facing the camera) once close enough.
+    if (this.state === 'idle' && this._spinY !== 0) {
+      const near = Math.round(this._spinY / TAU) * TAU;
+      if (Math.abs(this._spinY - near) < 0.02) this._spinY = 0;
+      else this._spinY += (near - this._spinY) * (1 - Math.exp(-4 * dt));
+      S.spinY = this._spinY;
+    }
 
     if (act) {
       this.u += dt / act.dur;
