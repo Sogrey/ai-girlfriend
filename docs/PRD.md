@@ -112,7 +112,7 @@
 | FR-311 | leave 离开（告别挥手→转身→走出画面→淡出） | ✅ | 截图序列 |
 | FR-312 | return 返回（从屏幕右缘走入→转身→挥手） | ✅ | 截图序列（入场姿态确认） |
 | FR-313 | change_costume 换装旋转（720° 旋转 + 中点换模） | ✅ | 动画路径 |
-| FR-314 | 动作库扩充：nod 点头 / blow_kiss 飞吻 / stretch 伸懒腰（别名归一化 kiss→blow_kiss、yawn→stretch；system_prompt 附触发示例） | ✅ | 骨骼数值 8/8 + stretch 视觉定稿 + LLM E2E“飞个吻”→action=blow_kiss（10-10）；摇头/打招呼组合拳留待后续 |
+| FR-314 | 动作库扩充：nod/shake_head/blow_kiss/stretch/greet/spin（别名归一化 kiss→blow_kiss、yawn→stretch、no→shake_head、hello→greet、twirl→spin；system_prompt 附触发示例） | ✅ | 两批验收：骨骼数值 8/8+8/8（含 spin 收尾归零与 change_costume 回归）+ LLM E2E 飞吻/摇头/打招呼/转圈 4 意图全 PASS（10-10） |
 | FR-315 | 说话时身体语言（TTS 说话期间在 idle 姿态上 alpha 混合叠加小幅手势层：右臂前抬摆动+头部强调点动） | ✅ | talkPose 手势层：lipsync.speaking 驱动、仅 idle 态生效、轮询容错 TTS 延迟（10-10 视觉+数值验证） |
 
 ### 3.4 交互系统
@@ -125,6 +125,7 @@
 | FR-404 | 点击身体 → 注意反应（星光粒子） | ✅ | 代码路径 |
 | FR-405 | 纵向贴身工具栏（🎤💬👗👋⚙️ 竖排于人物右下角，46×198px，距手臂约一指宽；鼠标靠近角色淡入/离开淡出；脚骨投影锚定栏底） | ✅ | 热调 150→70px 两轮 + 三选一视觉终验“近身”；min() 钳制适配任意窗口宽 |
 | FR-406 | 粒子系统：爱心/星光/爆散，Canvas 纹理 + Sprite 池（60 池化） | ✅ | 代码路径 |
+| FR-407 | 双击身体（400ms/50px 判定）→ 转圈：spin 动画 + 星星轨迹 + 5 条随机专属台词（speak_line 不入历史）；单击保持注意反应，双击头部不误触 | ✅ | CDP 真实指针注入 4/4：单击 idle/双击 spin/台词 TTS 播出/头部隔离（10-10） |
 
 ### 3.5 语音链路（STT）
 
@@ -170,7 +171,7 @@
 | FR-706 | OpenAI TTS Provider | ⬜ | 待开发（接口已预留） |
 | FR-707 | ElevenLabs Provider | ⬜ | 待开发（接口已预留） |
 | FR-708 | 本地 TTS Provider（如 GPT-SoVITS） | ⬜ | 待开发（接口已预留） |
-| FR-709 | 情绪联动音色（开心→活泼语调） | ⬜ | 待开发 |
+| FR-709 | 情绪联动语速（happy+10%/surprised+8%/sad−12%/caring−8%/angry−5%/shy−5%，叠加配置基础语速钳 ±50%，音量不动；speak_line 反应线同样生效） | ✅ | 单测 45/45 + 双击台词/对话 TTS 链路实测（10-10） |
 
 ### 3.8 口型同步
 
