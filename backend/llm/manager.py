@@ -29,9 +29,17 @@ class LLMManager:
             # provider doesn't support the flag (e.g. ollama) - plain call
             return await self.provider.chat(messages, system_prompt)
 
-    async def chat_stream(self, messages, system_prompt, on_delta=None):
-        """Streamed chat; providers without streaming fall back to chat()."""
-        return await self.provider.chat_stream(messages, system_prompt, on_delta)
+    async def chat_stream(self, messages, system_prompt, on_delta=None, use_json_format=True):
+        """Streamed chat; providers without streaming fall back to chat().
+        use_json_format is passed through when the provider supports it
+        (deepseek); older 3-arg providers (ollama/base) fall back via
+        TypeError, same pattern as chat()."""
+        try:
+            return await self.provider.chat_stream(messages, system_prompt, on_delta,
+                                                    use_json_format=use_json_format)
+        except TypeError:
+            # provider doesn't support the flag (e.g. ollama) - plain call
+            return await self.provider.chat_stream(messages, system_prompt, on_delta)
 
     async def health_check(self):
         try:

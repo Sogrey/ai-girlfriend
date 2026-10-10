@@ -52,11 +52,64 @@ def _unescape(s):
 
 
 class ReplySentenceTracker:
-    """Feed accumulated raw chunks in; collect early sentences; flush once."""
+    """Feed accumulated raw chunks in; collect early sentences; flush once.
+
+    Two stream shapes, auto-classified per chunk until the first emit locks
+    the mode (self._pos is bound to one mode's text):
+      'json'  — the reply value inside the raw JSON (the system prompt
+                asks for JSON; json_object mode guarantees it)
+      'plain' — the raw stream IS the reply text. This is the shape of the
+                streamed empty-reply retry (no json mode): deepseek then
+                answers in plain prose. Without this mode the retry turn
+                would silently lose first-sentence-early TTS — and retry
+                turns are common (json_object blank-content glitch)."""
 
     def __init__(self):
         self.emitted = []   # early-emitted sentences (stripped)
-        self._pos = 0       # scan offset into the unescaped reply text
+        self._pos = 0       # scan offset into the reply text
+        self._mode = None   # 'json' | 'plain', locked at first emit
+
+    # -- extraction -------------------------------------------------------
+
+    @staticmethod
+    def _plain_text(raw_partial):
+        """Stripped raw with code-fence markers removed — mirrors
+        validate()'s raw-text fallback so flush() stays consistent.
+        The closing fence is stripped even mid-arrival ('\n`', '\n``',
+        '\n```'), otherwise the lone '\n' after the last sentence would
+        falsely confirm it as non-last and steal the emotion flush."""
+        s = (raw_partial or '').strip()
+        if s.startswith('```'):
+            nl = s.find('\n')
+            if nl >= 0:
+                s = s[nl + 1:].strip()
+        s = re.sub(r'\n`{1,3}\s*$', '', s)
+        return s
+
+    def _classify(self, raw_partial):
+        """(mode, reply_text_so_far); text is None while it hasn't started."""
+        if self._mode == 'json':
+            m = _REPLY_RE.search(raw_partial)
+            if not m or not m.group(1):
+                return 'json', None
+            return 'json', _unescape(m.group(1))
+        if self._mode == 'plain':
+            return 'plain', self._plain_text(raw_partial)
+        # unlocked: decide from the raw prefix
+        s = (raw_partial or '').strip()
+        if not s:
+            return None, None
+        if s.startswith('```'):
+            nl = s.find('\n')
+            if nl < 0:
+                return None, None          # fence header still streaming
+            s = s[nl + 1:].strip()
+        if s.startswith('{'):
+            m = _REPLY_RE.search(raw_partial)
+            if not m or not m.group(1):
+                return 'json', None        # reply value not started yet
+            return 'json', _unescape(m.group(1))
+        return 'plain', s
 
     def feed(self, raw_partial):
         """Feed one accumulated raw chunk. Returns newly confirmed early
@@ -64,10 +117,9 @@ class ReplySentenceTracker:
         text streamed past it, i.e. provably not the reply's last
         sentence (a boundary at the very end of the so-far text might
         still be the tail — wait for the next chunk to be sure)."""
-        m = _REPLY_RE.search(raw_partial)
-        if not m or not m.group(1):
+        mode, text = self._classify(raw_partial)
+        if not text:
             return []
-        text = _unescape(m.group(1))
         out = []
         while len(self.emitted) < MAX_EARLY:
             # earliest boundary after _pos that has >=1 more char after it
@@ -83,6 +135,8 @@ class ReplySentenceTracker:
             if len(piece) > 1:
                 self.emitted.append(piece)
                 out.append(piece)
+                if self._mode is None:
+                    self._mode = mode       # lock: _pos now binds to it
             # len<=1 fragments are skipped — same rule as split_reply
         return out
 

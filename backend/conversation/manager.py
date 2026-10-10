@@ -153,14 +153,23 @@ class ConversationManager:
         result = validate(data, raw)
         self._absorb_memories(result)
         if not result['reply']:
-            logger.warning('LLM-stream returned empty reply (raw=%r), retrying without json mode', raw[:80])
+            logger.warning('LLM-stream returned empty reply (raw=%r), retrying (stream, no json mode)', raw[:80])
             try:
                 # DeepSeek's json_object mode intermittently returns a
                 # whitespace-only content (reasoning fine, content blank).
                 # Retrying WITHOUT response_format forces a different path.
-                raw = await self.llm.chat(self.history, self._prompt_with_memory(user_text), use_json_format=False)
+                # The retry is STREAMED and reuses the same on_delta chain,
+                # so first-sentence-early TTS also covers retry turns (when
+                # the model still emits JSON per the system prompt; a
+                # plain-text reply just falls back to the classic flush).
+                # The tracker is guaranteed empty here: any reply text seen
+                # in the first stream would have made validate()'s raw-text
+                # fallback non-empty, so no retry would have happened.
+                raw = await self.llm.chat_stream(self.history, self._prompt_with_memory(user_text),
+                                                 on_delta, use_json_format=False)
                 data = extract_json(raw)
                 result = validate(data, raw)
+                self._absorb_memories(result)
             except Exception as e:
                 logger.error('empty-reply retry failed: %s', e)
         if not result['reply']:
