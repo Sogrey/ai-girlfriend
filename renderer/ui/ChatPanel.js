@@ -3,6 +3,68 @@ import { bus } from '../core/EventBus.js';
 let panelEl, logEl, inputEl, sendEl;
 let open = false;
 
+// ---- bubble text copy: right-click mini menu ----
+// Selection itself is re-enabled via CSS on .chat-msg (the global
+// user-select:none at the top of main.css is a desktop-pet default that
+// prevents accidental selection while dragging her around).
+let ctxEl = null;
+
+function hideCtx() {
+  if (ctxEl) { ctxEl.remove(); ctxEl = null; }
+  document.removeEventListener('pointerdown', onDocPointer, true);
+}
+
+function onDocPointer(e) {
+  if (ctxEl && !ctxEl.contains(e.target)) hideCtx();
+}
+
+function copyText(text) {
+  const done = () => bus.emit('toast:show', { text: '已复制', kind: 'ok', ms: 1500 });
+  const fail = () => bus.emit('toast:show', { text: '复制失败', kind: 'error', ms: 2000 });
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => { fallbackCopy(text) ? done() : fail(); });
+  } else {
+    fallbackCopy(text) ? done() : fail();
+  }
+}
+
+function fallbackCopy(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
+function showCtx(e, msgEl) {
+  hideCtx();
+  const sel = window.getSelection();
+  const hasSel = sel && !sel.isCollapsed && msgEl.contains(sel.anchorNode);
+  ctxEl = document.createElement('div');
+  ctxEl.className = 'chat-ctx-menu';
+  const addBtn = (label, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); hideCtx(); });
+    ctxEl.appendChild(b);
+  };
+  if (hasSel) addBtn('复制选中文字', () => copyText(sel.toString()));
+  addBtn('复制本条', () => copyText(msgEl.innerText));
+  document.body.appendChild(ctxEl);
+  const r = ctxEl.getBoundingClientRect();
+  const x = Math.max(4, Math.min(e.clientX, window.innerWidth - r.width - 8));
+  const y = Math.max(4, Math.min(e.clientY, window.innerHeight - r.height - 8));
+  ctxEl.style.left = x + 'px';
+  ctxEl.style.top = y + 'px';
+  document.addEventListener('pointerdown', onDocPointer, true);
+}
+
 export function initChatPanel({ backend }) {
   panelEl = document.getElementById('chat-panel');
   logEl = document.getElementById('chat-log');
@@ -26,6 +88,14 @@ export function initChatPanel({ backend }) {
     } catch {
       addSys('🧠 记忆读取失败，稍后再试');
     }
+  });
+
+  // bubble right-click copy menu
+  logEl.addEventListener('contextmenu', (e) => {
+    const msg = e.target.closest('.chat-msg');
+    if (!msg || msg.classList.contains('typing')) { hideCtx(); return; }
+    e.preventDefault();
+    showCtx(e, msg);
   });
 
   bus.on('backend:ai_response', (msg) => { finalizeStream(msg.reply, msg.emotion); });
@@ -119,7 +189,7 @@ function send() {
 export function toggle() {
   open = !open;
   if (open) { panelEl.classList.remove('hidden'); bus.emit('panel:open'); inputEl.focus(); }
-  else { panelEl.classList.add('hidden'); bus.emit('panel:close'); }
+  else { hideCtx(); panelEl.classList.add('hidden'); bus.emit('panel:close'); }
   return open;
 }
 
