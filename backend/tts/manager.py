@@ -13,6 +13,7 @@ import time
 from tts.edge_provider import EdgeTTSProvider
 from tts.azure_provider import AzureTTSProvider
 from tts.openai_provider import OpenAITTSProvider
+from tts.elevenlabs_provider import ElevenLabsProvider
 
 logger = logging.getLogger('tts')
 
@@ -93,7 +94,14 @@ class TTSManager:
             # only the speaking rate carries over ('+10%' -> 1.1 speed)
             oi.setdefault('rate', rate)
             self.provider = OpenAITTSProvider(oi)
-        # elif name == 'elevenlabs': ElevenLabsProvider(tts_cfg.get('elevenlabs', {}))
+        elif name == 'elevenlabs':
+            el = dict(tts_cfg.get('elevenlabs', {}))
+            # elevenlabs is voice_id based (Rachel/...) — again its own
+            # voice universe; only the speaking rate carries over
+            # ('+10%' -> speed 1.1, clamped 0.7..1.2)
+            el.setdefault('rate', rate)
+            self.provider = ElevenLabsProvider(el)
+        # elif name == 'local': GPTSoVITSProvider(tts_cfg.get('local', {}))
         else:
             raise ValueError(f'未知的 TTS provider: {name}')
         self.provider_name = name

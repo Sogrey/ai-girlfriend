@@ -56,6 +56,8 @@ function refreshFields() {
     const f = el.dataset.for;
     const show = f === 'azure-tts' ? tprov === 'azure'
                : f === 'openai-tts' ? tprov === 'openai'
+               : f === 'elevenlabs-tts' ? tprov === 'elevenlabs'
+               : f === 'elevenlabs-voice' ? tprov === 'elevenlabs'
                : f === 'openai-voice' ? tprov === 'openai'
                : f === 'voice-ea' ? (tprov === 'edge' || tprov === 'azure')
                : f === prov;
@@ -77,6 +79,7 @@ function load() {
   document.getElementById('set-vad').checked = !!c.stt.vad_enabled;
   const ttsAz = c.tts.azure || {};
   const ttsOi = c.tts.openai || {};
+  const ttsEl = c.tts.elevenlabs || {};
   setVal('set-tts-provider', c.tts.provider || 'edge');
   setVal('set-azure-key', ttsAz.subscription_key || '');
   setVal('set-azure-region', ttsAz.region || 'eastasia');
@@ -84,6 +87,10 @@ function load() {
   setVal('set-openai-base-url', ttsOi.base_url || '');
   setVal('set-openai-model', ttsOi.model || 'tts-1');
   setVal('set-openai-voice', ttsOi.voice || 'nova');
+  setVal('set-el-key', ttsEl.api_key || '');
+  setVal('set-el-base-url', ttsEl.base_url || '');
+  setVal('set-el-model', ttsEl.model || 'eleven_multilingual_v2');
+  setVal('set-el-voice', ttsEl.voice_id || '21m00Tcm4TlvDq8ikWAM');
   setVal('set-tts-voice', c.tts.voice || c.tts.edge.voice);
   setVal('set-tts-rate', c.tts.rate || c.tts.edge.rate);
   document.getElementById('set-tts-volume').value = Math.round((c.tts.volume || 0.9) * 100);
@@ -169,9 +176,9 @@ function save() {
         volume: parseInt(document.getElementById('set-tts-volume').value, 10) / 100,
       };
       // shared zh-CN voice/rate only managed while edge/azure is active —
-      // when openai is selected the old voice stays untouched, so switching
-      // back to edge/azure restores it (openai has its own voice set)
-      if (provider !== 'openai' && ttsVoice) {
+      // when openai/elevenlabs is selected the old voice stays untouched,
+      // so switching back restores it (they have their own voice sets)
+      if (provider !== 'openai' && provider !== 'elevenlabs' && ttsVoice) {
         t.voice = ttsVoice;
         if (ttsRate) t.rate = ttsRate;
         t.edge = { ...(ttsRate ? { rate: ttsRate } : {}), voice: ttsVoice };
@@ -192,6 +199,17 @@ function save() {
           ...(oiBase ? { base_url: oiBase } : {}),
           model: getVal('set-openai-model') || 'tts-1',
           voice: getVal('set-openai-voice') || 'nova',
+        };
+      }
+      // ElevenLabs: key/base_url omit-when-blank; model/voice are selects
+      if (provider === 'elevenlabs') {
+        const elKey = (getVal('set-el-key') || '').trim();
+        const elBase = (getVal('set-el-base-url') || '').trim();
+        t.elevenlabs = {
+          ...(elKey ? { api_key: elKey } : {}),
+          ...(elBase ? { base_url: elBase } : {}),
+          model: getVal('set-el-model') || 'eleven_multilingual_v2',
+          voice_id: getVal('set-el-voice') || '21m00Tcm4TlvDq8ikWAM',
         };
       }
       return t;

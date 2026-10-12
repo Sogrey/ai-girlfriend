@@ -111,6 +111,7 @@
             <option value="edge">Edge 在线（免费）</option>
             <option value="azure">Azure 官方（需订阅 Key，更稳定）</option>
             <option value="openai">OpenAI 官方（需 API Key）</option>
+            <option value="elevenlabs">ElevenLabs（需 API Key，音质最佳）</option>
           </select>
         </label>
         <div data-for="azure-tts">
@@ -150,6 +151,33 @@
               <option value="zh-CN-YunjianNeural">云健 Yunjian</option>
               <option value="zh-CN-XiaohanNeural">晓涵 Xiaohan</option>
               <option value="zh-CN-XiaomengNeural">晓梦 Xiaomeng</option>
+            </select>
+          </label>
+        </div>
+        <div data-for="elevenlabs-tts">
+          <label>ElevenLabs API Key
+            <input id="set-el-key" type="password" placeholder="elevenlabs.io 注册后 Personal Info 页获取（免费层月 1 万字符）" />
+          </label>
+          <label>接口地址（中转/代理可选）
+            <input id="set-el-base-url" type="text" placeholder="默认 https://api.elevenlabs.io（可填中转地址）" />
+          </label>
+          <label>模型
+            <select id="set-el-model">
+              <option value="eleven_multilingual_v2">multilingual_v2（音质最佳·支持中文）</option>
+              <option value="eleven_turbo_v2_5">turbo_v2_5（均衡·低延迟）</option>
+              <option value="eleven_flash_v2_5">flash_v2_5（最快·支持中文）</option>
+            </select>
+          </label>
+        </div>
+        <div data-for="elevenlabs-voice">
+          <label>音色（ElevenLabs 预设）
+            <select id="set-el-voice">
+              <option value="21m00Tcm4TlvDq8ikWAM">Rachel（女·温柔，推荐中文）</option>
+              <option value="EXAVITQu4vr4xnSDxMaL">Bella（女·柔和）</option>
+              <option value="FGY2WhTYpPnrIDTdsKH5">Laura（女·年轻）</option>
+              <option value="pNInz6obpgDQGcFmaJgB">Adam（男·沉稳）</option>
+              <option value="ErXwobaYiN019PkySvjV">Antoni（男·亲切）</option>
+              <option value="TxGEqnHWrfWFTfGW9XjX">Josh（男·浑厚）</option>
             </select>
           </label>
         </div>
