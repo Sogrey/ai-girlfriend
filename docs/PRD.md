@@ -150,7 +150,7 @@
 | FR-604 | 输出容错：代码围栏剥离 / 首尾大括号截取 / 纯文本降级 | ✅ | definitions.py |
 | FR-605 | 意图→动作映射：leave/return/change_costume 等 10 动作 + 服装关键词猜测 | ✅ | 定义文件完成 |
 | FR-606 | 上下文记忆（最近 12 轮，可配置） | ✅ | conversation/manager.py |
-| FR-607 | 人格 System Prompt 独立文件 + 角色名/称呼注入 | ✅ | prompts/system_prompt.txt |
+| FR-607 | 人格 System Prompt 独立文件 + 角色名/称呼注入 | ✅ | prompts/system_prompt.txt；**可视化编辑升级**（10-13 Phase 29）：设置面板 textarea 编辑用户覆盖（占位符支持/热重载/恢复默认），空串回落内置 |
 | FR-608 | 语音与文字共用同一条对话管道（单一 ConversationManager） | ✅ | server.py 统一分发 |
 | FR-609 | API Key 安全存储（config/user.json，git 忽略） | ✅ | .gitignore 覆盖 |
 | FR-610 | 错误处理：401/402/429/超时/断网 → 中文友好提示 | ✅ | 冒烟测试验证 |
