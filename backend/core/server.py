@@ -32,7 +32,7 @@ from core.settings import load_config, load_prompt
 from core.stream_tts import ReplySentenceTracker, split_reply
 from llm.manager import LLMManager
 from stt.whisper_engine import WhisperEngine
-from tts.manager import TTSManager
+from tts.manager import TTSManager, TTSSilentError
 from conversation.manager import ConversationManager
 
 logger = logging.getLogger('server')
@@ -286,12 +286,19 @@ class BackendServer:
                 await self.send(ws, {
                     'type': 'tts_audio', 'seq': i, 'final': final, 'format': 'mp3', 'data': b64,
                 })
+            except TTSSilentError:
+                # breaker fast-fail: already alerted once for this streak —
+                # stay silent, player sequence still closes on the final
+                logger.warning('TTS breaker fast-fail on sentence %d', i)
+                if final:
+                    await self.send(ws, {'type': 'tts_audio', 'seq': i, 'final': True, 'data': ''})
             except Exception as e:
                 logger.error('TTS error on sentence %d: %s', i, e)
                 if final:
                     await self.send(ws, {'type': 'tts_audio', 'seq': i, 'final': True, 'data': ''})
-                else:
-                    await self.send(ws, {'type': 'error', 'code': 'tts', 'message': '语音合成失败: ' + str(e)})
+                if self.tts.error_alert_allowed:
+                    await self.send(ws, {'type': 'error', 'code': 'tts',
+                                         'message': '语音合成失败（恢复前不再重复提示，文字对话不受影响）：' + str(e)})
 
     # ---------------- streaming TTS (first-sentence-early) ----------------
 
@@ -351,14 +358,21 @@ class BackendServer:
                 sent_any = True
                 if final:
                     sent_final = True
+            except TTSSilentError:
+                logger.warning('TTS breaker fast-fail on sentence %d', seq)
+                if final:
+                    await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
+                    sent_any = True
+                    sent_final = True
             except Exception as e:
                 logger.error('TTS error on sentence %d: %s', seq, e)
                 if final:
                     await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
                     sent_any = True
                     sent_final = True
-                else:
-                    await self.send(ws, {'type': 'error', 'code': 'tts', 'message': '语音合成失败: ' + str(e)})
+                if self.tts.error_alert_allowed:
+                    await self.send(ws, {'type': 'error', 'code': 'tts',
+                                         'message': '语音合成失败（恢复前不再重复提示，文字对话不受影响）：' + str(e)})
             seq += 1
         if sent_any and not sent_final:
             # aborted before a final chunk went out — close the sequence

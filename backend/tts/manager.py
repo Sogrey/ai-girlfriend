@@ -8,11 +8,21 @@ To add a new provider in the future:
 """
 import logging
 import re
+import time
 
 from tts.edge_provider import EdgeTTSProvider
 from tts.azure_provider import AzureTTSProvider
 
 logger = logging.getLogger('tts')
+
+
+class TTSSilentError(RuntimeError):
+    """Raised by the circuit breaker when fast-failing: the provider is
+    known-bad in the current window, so no real attempt was made. The
+    server never surfaces these as error bubbles — the one-per-streak
+    alert was already shown when the breaker tripped (or the streak is a
+    leftover from a previous turn; recovery probing happens naturally
+    once the window expires)."""
 
 # Emotion-linked speaking rate (percent). Positive = livelier/faster,
 # negative = softer/slower. The user's configured volume is never touched.
@@ -30,11 +40,26 @@ def parse_rate(rate):
 
 
 class TTSManager:
+    # circuit breaker: after FAIL_STREAK_TRIP consecutive failures the
+    # breaker opens for TRIP_SECONDS — synth calls fail fast (no per-
+    # sentence network handshake delay) and are silent. The window expiry
+    # lets the next call probe for recovery; a success resets everything.
+    # Motivation: Edge-TTS 403 outage (10-12) made every sentence of every
+    # turn pop an error bubble and waste ~3s each on doomed handshakes.
+    FAIL_STREAK_TRIP = 2
+    TRIP_SECONDS = 60
+
     def __init__(self, config):
         self.config = config
         self.provider = None
         self.provider_name = ''
+        self._fail_streak = 0
+        self._trip_until = 0.0
         self.reload()
+
+    def _reset_breaker(self):
+        self._fail_streak = 0
+        self._trip_until = 0.0
 
     def _voice(self):
         """Voice promoted to provider-agnostic (edge & azure share the same
@@ -65,6 +90,7 @@ class TTSManager:
         else:
             raise ValueError(f'未知的 TTS provider: {name}')
         self.provider_name = name
+        self._reset_breaker()   # fresh provider: give it a clean slate
         logger.info('TTS provider = %s (%s)', name, getattr(self.provider, 'voice', ''))
 
     def rate_for_emotion(self, emotion):
@@ -73,7 +99,18 @@ class TTSManager:
         delta = EMOTION_RATE_DELTA.get(str(emotion or '').lower().strip(), 0)
         return f'{max(-50, min(50, base + delta)):+d}%'
 
+    @property
+    def error_alert_allowed(self):
+        """One user-facing alert per failure streak: only the FIRST failure
+        of a fresh streak (count resets on any success) bubbles to the UI;
+        every later failure of the same streak stays silent until the
+        service actually recovers."""
+        return self._fail_streak == 1
+
     async def synthesize(self, text, emotion=None, **kwargs):
+        # circuit breaker open: fail fast, no attempt, no latency
+        if time.monotonic() < self._trip_until:
+            raise TTSSilentError('语音服务暂时不可用（自动重试中，稍后自动恢复）')
         # emotion-linked speaking rate (happy livelier, sad/caring softer);
         # `emotion` itself is forwarded for providers that use it (azure
         # maps it to an express-as style), others simply ignore the kwarg
@@ -81,4 +118,16 @@ class TTSManager:
             kwargs.setdefault('emotion', emotion)
             if EMOTION_RATE_DELTA.get(str(emotion).lower().strip(), 0):
                 kwargs.setdefault('rate', self.rate_for_emotion(emotion))
-        return await self.provider.synthesize(text, **kwargs)
+        try:
+            data = await self.provider.synthesize(text, **kwargs)
+        except Exception:
+            self._fail_streak += 1
+            if self._fail_streak >= self.FAIL_STREAK_TRIP:
+                self._trip_until = time.monotonic() + self.TRIP_SECONDS
+                logger.warning('TTS breaker OPEN after %d consecutive failures '
+                               '(fast-fail %.0fs, one-time alert already shown)',
+                               self._fail_streak, self.TRIP_SECONDS)
+            raise
+        self._fail_streak = 0
+        self._trip_until = 0.0
+        return data
