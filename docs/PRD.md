@@ -169,7 +169,7 @@
 | FR-704 | 音色失效自动回退默认音色 | ✅ | edge_provider.py |
 | FR-705 | Azure TTS Provider | ✅ | REST v1 零新依赖（10-12 Phase 27）：音色/语速与 Edge 通用、express-as 情绪风格+400 回退、无 Key 引导/401 报错；单测 26/26 + 近 E2E 6/6 + CDP 20/20；真实合成待填 Key（TC-612） |
 | FR-706 | OpenAI TTS Provider | ✅ | REST /audio/speech（10-13 Phase 30）：自有六音色/gpt-4o-mini-tts 情绪指令/base_url 可配中转；验收 29+26+3；顺手根治 provider 热重载（TTS/LLM 保存后需重启→立即生效）；真实合成待填 Key（TC-614） |
-| FR-707 | ElevenLabs Provider | ⬜ | 待开发（接口已预留） |
+| FR-707 | ElevenLabs Provider | ✅ | REST xi-api-key（10-13 Phase 31）：三中文模型/预设 voice_id/base_url 中转；验收 30+25；真实合成待填 Key（TC-615） |
 | FR-708 | 本地 TTS Provider（如 GPT-SoVITS） | ⬜ | 待开发（接口已预留） |
 | FR-709 | 情绪联动语速（happy+10%/surprised+8%/sad−12%/caring−8%/angry−5%/shy−5%，叠加配置基础语速钳 ±50%，音量不动；speak_line 反应线同样生效） | ✅ | 单测 45/45 + 双击台词/对话 TTS 链路实测（10-10） |
 | FR-710 | TTS 故障熔断静默降级（连续 2 败开 60s 快速失败窗口，故障期每轮仅首次告警，窗口到期自动探活复位；final 句失败也纳入一次性告警） | ✅ | 单测+近 E2E 24/24（10-13 Phase 28）+ 真实 403 E2E 12/12 + 部署后 10/10；起因：Edge-TTS 403 封锁期告警刷屏根治 |
