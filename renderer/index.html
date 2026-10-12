@@ -110,6 +110,7 @@
           <select id="set-tts-provider">
             <option value="edge">Edge 在线（免费）</option>
             <option value="azure">Azure 官方（需订阅 Key，更稳定）</option>
+            <option value="openai">OpenAI 官方（需 API Key）</option>
           </select>
         </label>
         <div data-for="azure-tts">
@@ -126,15 +127,44 @@
             </select>
           </label>
         </div>
-        <label>音色（Edge/Azure 通用）
-          <select id="set-tts-voice">
-            <option value="zh-CN-XiaoxiaoNeural">晓晓 Xiaoxiao</option>
-            <option value="zh-CN-XiaoyiNeural">晓伊 Xiaoyi</option>
-            <option value="zh-CN-YunjianNeural">云健 Yunjian</option>
-            <option value="zh-CN-XiaohanNeural">晓涵 Xiaohan</option>
-            <option value="zh-CN-XiaomengNeural">晓梦 Xiaomeng</option>
-          </select>
-        </label>
+        <div data-for="openai-tts">
+          <label>OpenAI API Key
+            <input id="set-openai-key" type="password" placeholder="sk-...（platform.openai.com 获取）" />
+          </label>
+          <label>接口地址（中转/代理可选）
+            <input id="set-openai-base-url" type="text" placeholder="默认 https://api.openai.com/v1（国内建议填中转地址）" />
+          </label>
+          <label>模型
+            <select id="set-openai-model">
+              <option value="tts-1">tts-1（标准·快）</option>
+              <option value="tts-1-hd">tts-1-hd（高清）</option>
+              <option value="gpt-4o-mini-tts">gpt-4o-mini-tts（支持情绪指令）</option>
+            </select>
+          </label>
+        </div>
+        <div data-for="voice-ea">
+          <label>音色（Edge/Azure 通用）
+            <select id="set-tts-voice">
+              <option value="zh-CN-XiaoxiaoNeural">晓晓 Xiaoxiao</option>
+              <option value="zh-CN-XiaoyiNeural">晓伊 Xiaoyi</option>
+              <option value="zh-CN-YunjianNeural">云健 Yunjian</option>
+              <option value="zh-CN-XiaohanNeural">晓涵 Xiaohan</option>
+              <option value="zh-CN-XiaomengNeural">晓梦 Xiaomeng</option>
+            </select>
+          </label>
+        </div>
+        <div data-for="openai-voice">
+          <label>音色（OpenAI）
+            <select id="set-openai-voice">
+              <option value="nova">nova（女·活泼明亮）</option>
+              <option value="shimmer">shimmer（女·轻快）</option>
+              <option value="alloy">alloy（中性·均衡）</option>
+              <option value="echo">echo（男·沉稳）</option>
+              <option value="fable">fable（中性·叙事）</option>
+              <option value="onyx">onyx（男·浑厚）</option>
+            </select>
+          </label>
+        </div>
         <label>语速 <input id="set-tts-rate" type="text" placeholder="+0%" /></label>
         <label>音量 <input id="set-tts-volume" type="range" min="0" max="100" /></label>
       </fieldset>

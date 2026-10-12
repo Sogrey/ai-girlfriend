@@ -72,7 +72,16 @@ class BackendServer:
     def reload(self):
         self.config = load_config()
         self.system_prompt = load_prompt(self.config)
+        # NOTE: LLMManager/TTSManager.reload() are parameterless and read
+        # the dict captured at construction — refresh their reference first
+        # or hot-reload silently keeps serving the OLD config (bug caught
+        # 10-13 by the OpenAI provider-switch CDP test: tts stayed `edge`
+        # after saving `openai`; masked until now because every earlier
+        # reload verification ran after a restart, and conv.reload()
+        # already took the new config as a parameter).
+        self.llm.config = self.config
         self.llm.reload()
+        self.tts.config = self.config
         self.tts.reload()
         self.conv.reload(self.config, self.system_prompt)
         self.stt.reload_config(self.config)

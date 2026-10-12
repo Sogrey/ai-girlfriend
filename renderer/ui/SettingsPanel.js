@@ -54,8 +54,12 @@ function refreshFields() {
   const tprov = document.getElementById('set-tts-provider')?.value || 'edge';
   document.querySelectorAll('#settings-panel [data-for]').forEach((el) => {
     const f = el.dataset.for;
-    el.style.display = f === 'azure-tts' ? (tprov === 'azure' ? '' : 'none')
-                                         : (f === prov ? '' : 'none');
+    const show = f === 'azure-tts' ? tprov === 'azure'
+               : f === 'openai-tts' ? tprov === 'openai'
+               : f === 'openai-voice' ? tprov === 'openai'
+               : f === 'voice-ea' ? (tprov === 'edge' || tprov === 'azure')
+               : f === prov;
+    el.style.display = show ? '' : 'none';
   });
 }
 
@@ -72,9 +76,14 @@ function load() {
   setVal('set-whisper-lang', c.stt.language);
   document.getElementById('set-vad').checked = !!c.stt.vad_enabled;
   const ttsAz = c.tts.azure || {};
+  const ttsOi = c.tts.openai || {};
   setVal('set-tts-provider', c.tts.provider || 'edge');
   setVal('set-azure-key', ttsAz.subscription_key || '');
   setVal('set-azure-region', ttsAz.region || 'eastasia');
+  setVal('set-openai-key', ttsOi.api_key || '');
+  setVal('set-openai-base-url', ttsOi.base_url || '');
+  setVal('set-openai-model', ttsOi.model || 'tts-1');
+  setVal('set-openai-voice', ttsOi.voice || 'nova');
   setVal('set-tts-voice', c.tts.voice || c.tts.edge.voice);
   setVal('set-tts-rate', c.tts.rate || c.tts.edge.rate);
   document.getElementById('set-tts-volume').value = Math.round((c.tts.volume || 0.9) * 100);
@@ -154,13 +163,15 @@ function save() {
       return s;
     })(),
     tts: (() => {
+      const provider = getVal('set-tts-provider') || 'edge';
       const t = {
-        provider: getVal('set-tts-provider') || 'edge',
+        provider,
         volume: parseInt(document.getElementById('set-tts-volume').value, 10) / 100,
       };
-      if (ttsVoice) {
-        // provider-agnostic voice/rate (top level) + legacy edge mirror
-        // so pre-existing readers keep working
+      // shared zh-CN voice/rate only managed while edge/azure is active —
+      // when openai is selected the old voice stays untouched, so switching
+      // back to edge/azure restores it (openai has its own voice set)
+      if (provider !== 'openai' && ttsVoice) {
         t.voice = ttsVoice;
         if (ttsRate) t.rate = ttsRate;
         t.edge = { ...(ttsRate ? { rate: ttsRate } : {}), voice: ttsVoice };
@@ -168,8 +179,20 @@ function save() {
       // Azure key: omit when blank so a save from a non-loaded panel can
       // never blank a stored key (same defense as persona, 10-10 lesson)
       const azKey = (getVal('set-azure-key') || '').trim();
-      if (getVal('set-tts-provider') === 'azure' && azKey) {
+      if (provider === 'azure' && azKey) {
         t.azure = { subscription_key: azKey, region: getVal('set-azure-region') || 'eastasia' };
+      }
+      // OpenAI: key/base_url omit-when-blank (blank never overwrites a
+      // stored value); model/voice are selects that always carry a value
+      if (provider === 'openai') {
+        const oiKey = (getVal('set-openai-key') || '').trim();
+        const oiBase = (getVal('set-openai-base-url') || '').trim();
+        t.openai = {
+          ...(oiKey ? { api_key: oiKey } : {}),
+          ...(oiBase ? { base_url: oiBase } : {}),
+          model: getVal('set-openai-model') || 'tts-1',
+          voice: getVal('set-openai-voice') || 'nova',
+        };
       }
       return t;
     })(),
