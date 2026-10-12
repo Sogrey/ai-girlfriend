@@ -117,6 +117,19 @@ html,body {
 .chat-input-row input { flex:1; padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:rgba(0,0,0,.3); color:#fff; font-size:14px; }
 .chat-input-row input:focus { outline:none; border-color:rgba(255,120,170,.5); }
 .chat-input-row input.voice-preview { color:rgba(255,255,255,.55); font-style:italic; }
+
+/* persona (System Prompt) editor in settings */
+.prompt-meta-row { display:flex; justify-content:space-between; width:100%; padding:0 2px 4px; font-size:12px; }
+.prompt-status { opacity:.85; }
+.prompt-count { opacity:.55; }
+#settings-panel textarea#set-prompt {
+  width:100%; min-height:180px; max-height:46vh; resize:vertical;
+  font:12px/1.55 Consolas, "Courier New", monospace;
+  background:rgba(0,0,0,.35); color:#fff;
+  border:1px solid rgba(255,255,255,.15); border-radius:8px;
+  padding:8px 10px; user-select:text; cursor:text; white-space:pre-wrap;
+}
+#settings-panel textarea#set-prompt:focus { outline:none; border-color:rgba(255,120,170,.5); }
 .chat-input-row button { padding:8px 16px; border:none; border-radius:10px; cursor:pointer; background:rgba(255,120,170,.5); color:#fff; font-size:14px; }
 .chat-input-row button:hover { background:rgba(255,120,170,.7); }
 #chat-memory { width:38px; font-size:15px; padding:6px 0; }

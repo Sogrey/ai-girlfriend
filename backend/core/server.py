@@ -28,7 +28,7 @@ import logging
 
 import websockets
 
-from core.settings import load_config, load_prompt
+from core.settings import load_config, load_prompt, load_default_prompt_template
 from core.stream_tts import ReplySentenceTracker, split_reply
 from llm.manager import LLMManager
 from stt.whisper_engine import WhisperEngine
@@ -140,6 +140,15 @@ class BackendServer:
             await self.send(ws, {'type': 'history_cleared', '_id': mid})
         elif mtype == 'get_history':
             await self.send(ws, {'type': 'history', 'items': self.conv.get_recent_history(30), '_id': mid})
+        elif mtype == 'get_prompt':
+            # settings UI persona editor: stored custom override + built-in
+            # default template (raw, placeholders NOT injected)
+            await self.send(ws, {
+                'type': 'prompt',
+                'custom': (self.config.get('prompt', {}) or {}).get('system_prompt') or '',
+                'default': load_default_prompt_template(self.config),
+                '_id': mid,
+            })
         elif mtype == 'get_memory':
             await self.send(ws, {'type': 'memory', 'items': self.conv.memory.to_list(), '_id': mid})
         elif mtype == 'clear_memory':

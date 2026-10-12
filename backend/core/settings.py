@@ -33,16 +33,38 @@ def load_config():
     return deep_merge(base, user)
 
 
-def load_prompt(config):
-    """Load system prompt file, inject persona/user names."""
+def load_default_prompt_template(config):
+    """Built-in prompt file raw template (NO persona injection) — feeds the
+    settings UI's 'load default for editing' so the user edits the template
+    with {persona_name}/{user_name} placeholders intact."""
     prompt_file = config.get('app', {}).get('prompt_file', 'prompts/system_prompt.txt')
     path = os.path.join(ROOT, prompt_file)
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            prompt = f.read()
+            return f.read()
     except Exception as e:
-        print(f'[settings] cannot read prompt file, using minimal prompt: {e}')
-        prompt = '你是一个桌面AI女友。输出JSON: {"reply":"...","emotion":"happy","action":"idle","costume":null}'
+        print(f'[settings] cannot read prompt file: {e}')
+        return ''
+
+
+def load_prompt(config):
+    """System prompt: user override (config.prompt.system_prompt) when
+    non-blank, else the built-in file. Persona/user-name injection runs
+    LAST on whichever text wins, so renaming the persona keeps working
+    even with a custom prompt."""
+    prompt = None
+    custom = (config.get('prompt', {}) or {}).get('system_prompt') or ''
+    if custom.strip():
+        prompt = custom
+    if prompt is None:
+        prompt_file = config.get('app', {}).get('prompt_file', 'prompts/system_prompt.txt')
+        path = os.path.join(ROOT, prompt_file)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                prompt = f.read()
+        except Exception as e:
+            print(f'[settings] cannot read prompt file, using minimal prompt: {e}')
+            prompt = '你是一个桌面AI女友。输出JSON: {"reply":"...","emotion":"happy","action":"idle","costume":null}'
     persona = config.get('app', {}).get('persona_name', '小满')
     user_name = config.get('app', {}).get('user_name', '')
     prompt = prompt.replace('{persona_name}', persona).replace('{user_name}', user_name)

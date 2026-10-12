@@ -140,6 +140,20 @@
       </fieldset>
 
       <fieldset>
+        <legend>人设 · System Prompt</legend>
+        <div class="prompt-meta-row">
+          <span id="prompt-status" class="prompt-status">当前使用：内置默认</span>
+          <span id="prompt-count" class="prompt-count">0 字</span>
+        </div>
+        <textarea id="set-prompt" rows="14" placeholder="留空 = 使用内置默认人设；支持 {persona_name} / {user_name} 占位符（保存后改角色名，人设会自动跟着变）&#10;⚠ 模板内含 JSON 输出格式约束（emotion/action 等），删除那段会导致她失去动作与情绪"></textarea>
+        <label class="row-action">
+          <button id="set-prompt-load-default" type="button">载入默认进行编辑</button>
+          <button id="set-prompt-reset" type="button">恢复内置默认</button>
+          <span class="hint">编辑后点底部「保存」生效，下一句话立即按新人设回复</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
         <legend>系统</legend>
         <label><input id="set-startup" type="checkbox" /> 开机自动启动</label>
         <label>召唤/隐藏快捷键 <input id="set-hotkey" type="text" placeholder="Ctrl+Alt+G" /></label>

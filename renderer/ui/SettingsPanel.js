@@ -6,6 +6,7 @@ let open = false;
 let loaded = false;   // set by load(); a save without a prior load is
                       // always an anomaly (inputs empty / selects defaulted)
                       // and would corrupt user.json via deep-merge
+let promptDefaultTemplate = '';   // built-in template (raw, from get_prompt)
 
 export function initSettingsPanel({ voice }) {
   panelEl = document.getElementById('settings-panel');
@@ -26,6 +27,25 @@ export function initSettingsPanel({ voice }) {
     if (!confirm('确定让她忘掉全部长期记忆吗？（对话历史不受影响）')) return;
     bus.emit('backend:send', { type: 'clear_memory' });
     bus.emit('toast:show', { text: '长期记忆已清除', kind: 'ok', ms: 2000 });
+  });
+
+  // persona (System Prompt) editor
+  const promptEl = document.getElementById('set-prompt');
+  const updateCount = () => {
+    const n = (promptEl?.value || '').length;
+    const c = document.getElementById('prompt-count');
+    if (c) c.textContent = n + ' 字';
+  };
+  promptEl?.addEventListener('input', updateCount);
+  document.getElementById('set-prompt-load-default')?.addEventListener('click', () => {
+    promptEl.value = promptDefaultTemplate || '(默认模板获取失败，请稍后重试)';
+    updateCount();
+    promptEl.focus();
+  });
+  document.getElementById('set-prompt-reset')?.addEventListener('click', () => {
+    promptEl.value = '';
+    updateCount();
+    bus.emit('toast:show', { text: '已清空，点底部「保存」即恢复内置默认人设', kind: 'ok', ms: 3000 });
   });
 }
 
@@ -63,6 +83,21 @@ function load() {
   document.getElementById('set-fps').checked = !!c.app.fps_overlay;
   refreshFields();
   loaded = true;
+
+  // persona editor: stored custom + built-in default (async fill)
+  window.__backend?.request({ type: 'get_prompt' })?.then((m) => {
+    promptDefaultTemplate = m.default || '';
+    setVal('set-prompt', m.custom || '');
+    const st = document.getElementById('prompt-status');
+    if (st) st.textContent = (m.custom || '').trim() ? '当前使用：自定义人设' : '当前使用：内置默认';
+    updatePromptCount();
+  }).catch?.(() => {});
+}
+
+function updatePromptCount() {
+  const el = document.getElementById('set-prompt');
+  const c = document.getElementById('prompt-count');
+  if (el && c) c.textContent = (el.value || '').length + ' 字';
 }
 
 function save() {
@@ -140,6 +175,15 @@ function save() {
     })(),
     window: { launch_at_startup: document.getElementById('set-startup').checked },
     hotkey: (getVal('set-hotkey') || 'Control+Alt+G').trim() || 'Control+Alt+G',
+    prompt: (() => {
+      // blank OR identical to the built-in template = clear the override
+      // (empty string falls back to the default file in load_prompt)
+      const t = (getVal('set-prompt') || '').trim();
+      if (!t || t === (promptDefaultTemplate || '').trim()) {
+        return { system_prompt: '' };
+      }
+      return { system_prompt: t };
+    })(),
   };
   saveConfig(patch).then((saved) => {
     window.desktop.setLaunchAtStartup(patch.window.launch_at_startup);
