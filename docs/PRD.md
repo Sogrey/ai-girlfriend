@@ -167,7 +167,7 @@
 | FR-702 | 回复按句切分（。！？；\n）流式合成逐句下发，降低首音延迟 | ✅ | server.py；**首句提前合成升级**（10-11 Phase 24）：LLM 流式期间非末句并行合成（core/stream_tts.py），早期句中性语速、末句带情绪；**空回复流式重试**（Phase 25）：重试轮纯文本流同样边生成边出声（tracker json/plain 自适应） |
 | FR-703 | TTS Provider 抽象架构（base.py 接口 + manager 注册） | ✅ | 架构完成 |
 | FR-704 | 音色失效自动回退默认音色 | ✅ | edge_provider.py |
-| FR-705 | Azure TTS Provider | ⬜ | 待开发（接口已预留） |
+| FR-705 | Azure TTS Provider | ✅ | REST v1 零新依赖（10-12 Phase 27）：音色/语速与 Edge 通用、express-as 情绪风格+400 回退、无 Key 引导/401 报错；单测 26/26 + 近 E2E 6/6 + CDP 20/20；真实合成待填 Key（TC-612） |
 | FR-706 | OpenAI TTS Provider | ⬜ | 待开发（接口已预留） |
 | FR-707 | ElevenLabs Provider | ⬜ | 待开发（接口已预留） |
 | FR-708 | 本地 TTS Provider（如 GPT-SoVITS） | ⬜ | 待开发（接口已预留） |
