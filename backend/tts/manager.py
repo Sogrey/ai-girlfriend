@@ -10,6 +10,7 @@ import logging
 import re
 
 from tts.edge_provider import EdgeTTSProvider
+from tts.azure_provider import AzureTTSProvider
 
 logger = logging.getLogger('tts')
 
@@ -35,12 +36,30 @@ class TTSManager:
         self.provider_name = ''
         self.reload()
 
+    def _voice(self):
+        """Voice promoted to provider-agnostic (edge & azure share the same
+        zh-CN neural voices); old configs keep tts.edge.voice as fallback."""
+        t = self.config.get('tts', {})
+        return t.get('voice') or t.get('edge', {}).get('voice', 'zh-CN-XiaoxiaoNeural')
+
+    def _rate(self):
+        t = self.config.get('tts', {})
+        return t.get('rate') or t.get('edge', {}).get('rate', '+0%')
+
     def reload(self):
         tts_cfg = self.config.get('tts', {})
         name = tts_cfg.get('provider', 'edge')
+        voice, rate = self._voice(), self._rate()
         if name == 'edge':
-            self.provider = EdgeTTSProvider(tts_cfg.get('edge', {}))
-        # elif name == 'azure':   AzureTTSProvider(tts_cfg.get('azure', {}))
+            ed = dict(tts_cfg.get('edge', {}))
+            ed.setdefault('voice', voice)
+            ed.setdefault('rate', rate)
+            self.provider = EdgeTTSProvider(ed)
+        elif name == 'azure':
+            az = dict(tts_cfg.get('azure', {}))
+            az.setdefault('voice', voice)
+            az.setdefault('rate', rate)
+            self.provider = AzureTTSProvider(az)
         # elif name == 'openai':  OpenAITTSProvider(tts_cfg.get('openai', {}))
         # elif name == 'elevenlabs': ElevenLabsProvider(tts_cfg.get('elevenlabs', {}))
         else:
@@ -50,13 +69,16 @@ class TTSManager:
 
     def rate_for_emotion(self, emotion):
         """Config base rate plus the emotion delta, clamped to ±50%."""
-        base = parse_rate(self.config.get('tts', {}).get('edge', {}).get('rate', '+0%'))
+        base = parse_rate(self._rate())
         delta = EMOTION_RATE_DELTA.get(str(emotion or '').lower().strip(), 0)
         return f'{max(-50, min(50, base + delta)):+d}%'
 
     async def synthesize(self, text, emotion=None, **kwargs):
         # emotion-linked speaking rate (happy livelier, sad/caring softer);
-        # providers that don't consume `rate` simply ignore the kwarg
-        if emotion and EMOTION_RATE_DELTA.get(str(emotion).lower().strip(), 0):
-            kwargs.setdefault('rate', self.rate_for_emotion(emotion))
+        # `emotion` itself is forwarded for providers that use it (azure
+        # maps it to an express-as style), others simply ignore the kwarg
+        if emotion:
+            kwargs.setdefault('emotion', emotion)
+            if EMOTION_RATE_DELTA.get(str(emotion).lower().strip(), 0):
+                kwargs.setdefault('rate', self.rate_for_emotion(emotion))
         return await self.provider.synthesize(text, **kwargs)

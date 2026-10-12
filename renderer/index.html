@@ -106,7 +106,27 @@
 
       <fieldset>
         <legend>语音合成 (TTS)</legend>
-        <label>音色
+        <label>服务
+          <select id="set-tts-provider">
+            <option value="edge">Edge 在线（免费）</option>
+            <option value="azure">Azure 官方（需订阅 Key，更稳定）</option>
+          </select>
+        </label>
+        <div data-for="azure-tts">
+          <label>Azure 订阅密钥
+            <input id="set-azure-key" type="password" placeholder="语音服务的 Key（Azure 门户获取）" />
+          </label>
+          <label>Azure 区域
+            <select id="set-azure-region">
+              <option value="eastasia">东亚（香港）</option>
+              <option value="southeastasia">东南亚</option>
+              <option value="japaneast">日本东部</option>
+              <option value="eastus">美国东部</option>
+              <option value="westeurope">西欧</option>
+            </select>
+          </label>
+        </div>
+        <label>音色（Edge/Azure 通用）
           <select id="set-tts-voice">
             <option value="zh-CN-XiaoxiaoNeural">晓晓 Xiaoxiao</option>
             <option value="zh-CN-XiaoyiNeural">晓伊 Xiaoyi</option>
