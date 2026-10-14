@@ -117,17 +117,20 @@ class BackendServer:
 
     async def handler(self, websocket):
         self.clients.add(websocket)
+        logger.debug('WS-HANDLER enter: client=%s', id(websocket))
         logger.info('renderer connected (%d clients)', len(self.clients))
         self.start_stt_async()
         await self.send(websocket, self.status_payload())
         try:
             async for message in websocket:
+                logger.debug('WS-FRAME in: %s', str(message)[:120])
                 try:
                     msg = json.loads(message)
                 except Exception:
                     continue
                 try:
                     await self.dispatch(websocket, msg)
+                    logger.debug('WS-FRAME dispatched: %s', msg.get('type'))
                 except Exception as e:
                     logger.exception('message handling failed')
                     await self.send(websocket, {'type': 'error', 'code': 'internal', 'message': str(e)})

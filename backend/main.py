@@ -17,6 +17,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger('main')
 
+# WS-frame-level forensics for the intermittent "frontend connects, gets
+# the welcome push, but requests never dispatch" condition (10-14: three
+# occurrences, only with BAT/Start-Process launches, never reproduced
+# since; py-spy showed an IDLE event loop = frames never reached the
+# coroutine). Set AGF_DEBUG_WS=1 to log every inbound frame + handler
+# milestones into .temp/ws-debug.log and nail the culprit next time.
+if os.environ.get('AGF_DEBUG_WS'):
+    _dbg = logging.FileHandler(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        '.temp', 'ws-debug.log'), encoding='utf-8')
+    _dbg.setLevel(logging.DEBUG)
+    _dbg.setFormatter(logging.Formatter('%(asctime)s.%(msecs)d [%(levelname)s] %(message)s'))
+    _core_logger = logging.getLogger('server')   # name used inside core/server.py
+    _core_logger.addHandler(_dbg)
+    _core_logger.setLevel(logging.DEBUG)
+
 
 def main():
     from core.server import BackendServer
