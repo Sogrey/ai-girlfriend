@@ -112,6 +112,8 @@ export function initChatPanel({ backend }) {
     const dots = logEl.querySelector('.typing');
     if (dots) dots.remove();
   });
+  // other panels (reminder etc.) push system bubbles through the bus
+  bus.on('chat:sys', (m) => addSys(m.text));
 }
 
 // ---- live reply bubble (thinking -> typewriter streaming) ----

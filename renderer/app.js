@@ -18,6 +18,7 @@ import { initToast, show } from './ui/Toast.js';
 import { initToolbar } from './ui/Toolbar.js';
 import { initChatPanel, toggle as toggleChat, addAI as addAIBubble, addUser as addChatUser } from './ui/ChatPanel.js';
 import { initSettingsPanel, toggle as toggleSettings } from './ui/SettingsPanel.js';
+import { initReminderPanel } from './ui/ReminderPanel.js';
 
 async function boot() {
   window.__backend = backend;
@@ -56,6 +57,7 @@ async function boot() {
   initChatPanel({ backend });
   const settings = { toggle: () => toggleSettings() };
   initSettingsPanel({ voice });
+  initReminderPanel();
 
   const dispatcher = new ActionDispatcher({
     animation, emotion, avatar, costume, particles, lipsync, chat, backend,

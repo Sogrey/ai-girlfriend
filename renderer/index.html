@@ -35,8 +35,52 @@
     <div id="chat-log" class="chat-log"></div>
     <div class="chat-input-row">
       <button id="chat-memory" title="她记得什么">🧠</button>
+      <button id="chat-remind" title="提醒设置">⏰</button>
       <input id="chat-input" type="text" placeholder="说点什么…" autocomplete="off" />
       <button id="chat-send">发送</button>
+    </div>
+  </div>
+
+  <!-- Reminder panel -->
+  <div id="reminder-panel" class="panel hidden">
+    <div class="panel-header">提醒 <button class="panel-close" data-close="reminders">×</button></div>
+    <div class="settings-body">
+      <div id="rem-list"></div>
+      <fieldset>
+        <legend>添加提醒</legend>
+        <label>类型
+          <select id="rem-type">
+            <option value="hourly">每小时（第 X 分钟）</option>
+            <option value="daily">每天（HH:MM）</option>
+            <option value="once">一次（指定时间）</option>
+          </select>
+        </label>
+        <label data-type-field="hourly">分钟（0~59）
+          <input id="rem-minute" type="number" min="0" max="59" value="0" />
+        </label>
+        <label data-type-field="daily" style="display:none">时间
+          <input id="rem-hhmm" type="time" value="09:00" />
+        </label>
+        <label data-type-field="once" style="display:none">触发时刻
+          <input id="rem-at" type="datetime-local" />
+        </label>
+        <label>内容（可用 {time} 占位符）
+          <input id="rem-text" type="text" placeholder="如：主人，{time} 了，该喝水啦～" />
+        </label>
+        <label>情绪
+          <select id="rem-emotion">
+            <option value="caring">温柔关心</option>
+            <option value="happy">开心</option>
+            <option value="neutral">平静</option>
+          </select>
+        </label>
+        <label class="row-action">
+          <button id="rem-add" type="button">添加</button>
+          <button id="rem-water" type="button" class="rem-quick">💧 每小时喝水</button>
+          <button id="rem-stretch" type="button" class="rem-quick">🧘 每半小时活动</button>
+        </label>
+      </fieldset>
+      <label class="row-action"><button id="rem-cancel" type="button">关闭</button></label>
     </div>
   </div>
 

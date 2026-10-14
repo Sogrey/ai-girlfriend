@@ -7,11 +7,15 @@ Renderer -> Backend:
   {type:'transcribe_partial', data: <base64 webm/opus>, format:'webm'}   # live partial while speaking
   {type:'transcribe_audio', data: <base64 webm/opus>, format:'webm'}    # final utterance -> STT -> LLM
   {type:'speak_line', text, emotion}          # local reaction lines (head pat etc.)
+  {type:'get_reminders'}                      # -> {type:'reminders', items}
+  {type:'add_reminder', rtype:'once|daily|hourly', text, at|hhmm|minute, emotion}
+  {type:'delete_reminder', id}
   {type:'reload_config'}
   {type:'ping'}            -> {type:'pong'}
 
 Backend -> Renderer:
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
+  {type:'reminder_due', text, emotion, schedule}   # a scheduled reminder fired (text bubble + speech)
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
   {type:'stt_result', text}
   {type:'ai_response', reply, emotion, action, costume}
@@ -29,6 +33,7 @@ import logging
 import websockets
 
 from core.settings import load_config, load_prompt, load_default_prompt_template
+from core.reminders import ReminderStore
 from core.stream_tts import ReplySentenceTracker, split_reply
 from llm.manager import LLMManager
 from stt.whisper_engine import WhisperEngine
@@ -58,6 +63,9 @@ class BackendServer:
         self._pending_partial = None
         self._partial_task = None
         self._stt_epoch = 0
+        # scheduled reminders (hourly/daily/once): fires as speech + a
+        # text bubble so the feature also works while TTS is degraded
+        self.reminders = ReminderStore()
 
     # ---------------- lifecycle ----------------
 
@@ -158,6 +166,20 @@ class BackendServer:
                 'default': load_default_prompt_template(self.config),
                 '_id': mid,
             })
+        elif mtype == 'get_reminders':
+            await self.send(ws, {'type': 'reminders', 'items': self.reminders.to_list(), '_id': mid})
+        elif mtype == 'add_reminder':
+            rem, err = self.reminders.add(
+                msg.get('rtype') or msg.get('reminder_type'), msg.get('text'),
+                at=msg.get('at'), hhmm=msg.get('hhmm'), minute=msg.get('minute'),
+                emotion=msg.get('emotion'))
+            if err:
+                await self.send(ws, {'type': 'error', 'code': 'reminder', 'message': err, '_id': mid})
+            else:
+                await self.send(ws, {'type': 'reminders', 'items': self.reminders.to_list(), '_id': mid})
+        elif mtype == 'delete_reminder':
+            ok = self.reminders.delete(msg.get('id'))
+            await self.send(ws, {'type': 'reminder_deleted', 'ok': ok, 'id': msg.get('id'), '_id': mid})
         elif mtype == 'get_memory':
             await self.send(ws, {'type': 'memory', 'items': self.conv.memory.to_list(), '_id': mid})
         elif mtype == 'clear_memory':
@@ -396,10 +418,37 @@ class BackendServer:
             # aborted before a final chunk went out — close the sequence
             await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
 
+    # ---------------- scheduled reminders ----------------
+
+    async def _reminder_loop(self):
+        """Scan reminders every 20s; when one fires, broadcast a text
+        bubble (reminder_due) + spoken line (speak_reply) to every client.
+        The bubble matters most: with TTS degraded (e.g. edge 403) the
+        reminder still reaches the user as text."""
+        while True:
+            try:
+                await asyncio.sleep(20)
+                fired = self.reminders.due()
+                for rem, text in fired:
+                    logger.info('reminder fired: %s %r', rem['id'], text[:30])
+                    payload = {'type': 'reminder_due', 'text': text,
+                               'emotion': rem.get('emotion'), 'schedule': rem.get('type')}
+                    for ws in list(self.clients):
+                        await self.send(ws, payload)
+                        try:
+                            await self.speak_reply(ws, text, rem.get('emotion'))
+                        except Exception as e:
+                            logger.warning('reminder speech failed (ignored): %s', e)
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.error('reminder loop error (continuing): %s', e)
+
     # ---------------- entry ----------------
 
     async def run(self):
         logger.info('backend listening on ws://127.0.0.1:%d', self.port)
+        asyncio.ensure_future(self._reminder_loop())
         async with websockets.serve(self.handler, '127.0.0.1', self.port,
                                    max_size=MAX_AUDIO_MB * 1024 * 1024,
                                    ping_interval=20, ping_timeout=30):
