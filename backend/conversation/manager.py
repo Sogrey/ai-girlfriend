@@ -98,14 +98,25 @@ class ConversationManager:
         self.history = []
 
     def _prompt_with_memory(self, user_text):
-        """System prompt + long-term memory injection for this turn."""
+        """System prompt + long-term memory injection for this turn.
+        A runtime time block rides every turn so the LLM can answer
+        "现在几点了" and resolve relative times like "明天早上9点" into
+        a concrete reminder time (Phase 33)."""
+        base = self.system_prompt
         try:
             block = self.memory.prompt_block(user_text)
             if block:
-                return self.system_prompt + block
+                base += block
         except Exception as e:
             logger.warning('memory recall failed (ignored): %s', e)
-        return self.system_prompt
+        return base + self._runtime_block()
+
+    @staticmethod
+    def _runtime_block():
+        lt = time.localtime()
+        weekday = ('周一', '周二', '周三', '周四', '周五', '周六', '周日')[lt.tm_wday]
+        now = time.strftime('%Y-%m-%d %H:%M:%S', lt)
+        return f'\n\n## 当前环境\n现在是 {now} {weekday}。若用户提到相对时间（明天/今晚/半小时后等），请按此时间换算成具体时间再使用。'
 
     def _absorb_memories(self, result):
         """Store the memories the LLM extracted alongside its reply."""

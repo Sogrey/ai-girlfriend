@@ -3,7 +3,8 @@
 
 Protocol (all JSON):
 Renderer -> Backend:
-  {type:'user_message', text}
+  {type:'user_message', text}            # may create a reminder when the LLM
+                                         # emits a `reminder` intent (Phase 33)
   {type:'transcribe_partial', data: <base64 webm/opus>, format:'webm'}   # live partial while speaking
   {type:'transcribe_audio', data: <base64 webm/opus>, format:'webm'}    # final utterance -> STT -> LLM
   {type:'speak_line', text, emotion}          # local reaction lines (head pat etc.)
@@ -16,6 +17,7 @@ Renderer -> Backend:
 Backend -> Renderer:
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
   {type:'reminder_due', text, emotion, schedule}   # a scheduled reminder fired (text bubble + speech)
+  {type:'reminder_added', reminder, items}    # a reminder was created via natural-language chat: toast + panel refresh
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
   {type:'stt_result', text}
   {type:'ai_response', reply, emotion, action, costume}
@@ -214,6 +216,7 @@ class BackendServer:
             await worker
             await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
             return
+        await self._apply_chat_reminder(ws, result)
         resp = dict(result)
         resp['type'] = 'ai_response'
         resp['_id'] = mid
@@ -262,6 +265,7 @@ class BackendServer:
                 await worker
                 await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
                 return
+            await self._apply_chat_reminder(ws, result)
             resp = dict(result)
             resp['type'] = 'ai_response'
             resp['_id'] = mid
@@ -422,6 +426,31 @@ class BackendServer:
             await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
 
     # ---------------- scheduled reminders ----------------
+
+    async def _apply_chat_reminder(self, ws, result):
+        """Natural-language reminder creation (Phase 33): when the LLM's
+        reply carried a validated `reminder` intent, run it through the
+        store. On success broadcast reminder_added (toast + panel refresh)
+        to every client; on rejection notify just the requester — her
+        streamed reply may have claimed success, so the error bubble is
+        the correction channel."""
+        intent = (result or {}).get('reminder')
+        if not intent:
+            return
+        rem, err = self.reminders.add(
+            intent['type'], intent['text'],
+            at=intent.get('at'), hhmm=intent.get('hhmm'),
+            minute=intent.get('minute'), emotion=intent.get('emotion'))
+        if err:
+            logger.warning('chat reminder rejected: %s intent=%r', err, intent)
+            await self.send(ws, {'type': 'error', 'code': 'reminder',
+                                 'message': '提醒没设成功：' + err})
+            return
+        logger.info('chat reminder added: %s %s %r', rem['id'], rem['type'], rem['text'][:30])
+        payload = {'type': 'reminder_added', 'reminder': rem,
+                   'items': self.reminders.to_list()}
+        for c in list(self.clients):
+            await self.send(c, payload)
 
     async def _reminder_loop(self):
         """Scan reminders every 20s; when one fires, broadcast a text

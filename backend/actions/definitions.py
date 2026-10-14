@@ -2,6 +2,7 @@
 """Valid action/emotion/costume enums shared between LLM output and renderer."""
 import json
 import re
+import time
 
 VALID_ACTIONS = {
     'idle', 'wave', 'leave', 'return', 'change_costume', 'comfort',
@@ -56,6 +57,116 @@ def extract_json(raw):
         return json.loads(raw)
     except Exception:
         return {}
+
+
+def normalize_llm_reminder(data, now=None):
+    """Normalize the LLM's optional `reminder` key (natural-language-created
+    reminder, Phase 33) into a ReminderStore.add() argument dict, or None
+    when malformed/absent. LLM schema (see system_prompt):
+      {"type": "once|daily|hourly", "time": "...", "text": "...", "emotion": "..."}
+    `time` is whatever the LLM resolved "明天早上9点" into:
+      once  -> epoch seconds, "YYYY-MM-DD HH:MM[:SS]", "MM-DD HH:MM" or "HH:MM"
+               (bare HH:MM in the past rolls to tomorrow)
+      daily -> "HH:MM[:SS]"
+      hourly -> minute number 0..59 (int / "30" / "30.0" / "每小时的第30分")
+    """
+    if not isinstance(data, dict):
+        return None
+    now = time.time() if now is None else now
+    rtype = str(data.get('type') or '').strip().lower()
+    if rtype not in ('once', 'daily', 'hourly'):
+        return None
+    text = str(data.get('text') or '').strip()
+    if not text:
+        return None
+    text = text[:120]
+    emotion = str(data.get('emotion') or '').lower().strip()
+    emotion = EMOTION_ALIASES.get(emotion, emotion)
+    if emotion not in VALID_EMOTIONS:
+        emotion = 'caring'
+    t = data.get('time')
+    out = {'type': rtype, 'text': text, 'emotion': emotion}
+    if rtype == 'once':
+        at = _parse_once_time(t, now)
+        if at is None:
+            return None
+        out['at'] = at
+    elif rtype == 'daily':
+        hhmm = _parse_hhmm(t)
+        if hhmm is None:
+            return None
+        out['hhmm'] = hhmm
+    else:
+        m = None
+        if isinstance(t, bool):
+            m = None
+        elif isinstance(t, (int, float)):
+            m = int(t)
+        elif isinstance(t, str):
+            mt = re.search(r'\d+', t.strip())
+            m = int(mt.group()) if mt else None
+        if m is None or not (0 <= m < 60):
+            return None
+        out['minute'] = m
+    return out
+
+
+def _parse_hhmm(v):
+    """'HH:MM[:SS]' (or 'H:MM') -> 'HH:MM', or None."""
+    if not isinstance(v, str):
+        v = str(v or '')
+    try:
+        parts = v.strip().split(':')
+        hh, mm = int(parts[0]), int(parts[1])
+        assert 0 <= hh < 24 and 0 <= mm < 60
+    except Exception:
+        return None
+    return '%02d:%02d' % (hh, mm)
+
+
+def _parse_once_time(v, now):
+    """Best-effort absolute/rolling time -> epoch seconds (future only)."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        try:
+            t = float(v)
+        except (TypeError, ValueError):
+            return None
+        return t if t > now else None
+    s = str(v or '').strip().replace('T', ' ')
+    if not s:
+        return None
+    if re.fullmatch(r'\d{10,14}', s):          # epoch seconds / ms as string
+        t = float(s)
+        if t > 1e12:
+            t /= 1000.0
+        return t if t > now else None
+    lt_now = time.localtime(now)
+    for fmt, has_date in (('%Y-%m-%d %H:%M:%S', True), ('%Y-%m-%d %H:%M', True),
+                          ('%Y/%m/%d %H:%M', True),
+                          ('%m-%d %H:%M', 'month'), ('%m月%d日 %H:%M', 'month'),
+                          ('%H:%M:%S', False), ('%H:%M', False)):
+        try:
+            st = time.strptime(s, fmt)
+        except ValueError:
+            continue
+        if has_date is True:
+            t = time.mktime(st)
+        elif has_date == 'month':
+            # no year -> assume current year, roll to next year if already past
+            t = time.mktime((lt_now.tm_year, st.tm_mon, st.tm_mday, st.tm_hour,
+                             st.tm_min, st.tm_sec, 0, 0, -1))
+            if t <= now:
+                t += 86400 * 366
+        else:
+            # bare HH:MM[:SS] -> today, or tomorrow when already past
+            t = time.mktime((lt_now.tm_year, lt_now.tm_mon, lt_now.tm_mday,
+                             st.tm_hour, st.tm_min, st.tm_sec, 0, 0, -1))
+            if t <= now:
+                t += 86400
+        return t if t > now else None
+    return None
 
 
 def validate(data, raw_text=''):
@@ -119,5 +230,7 @@ def validate(data, raw_text=''):
                 memories.append(t)
             if len(memories) >= MEMORY_MAX_ITEMS:
                 break
+    # natural-language reminder intent (Phase 33): normalized or None
+    reminder = normalize_llm_reminder(data.get('reminder'))
     return {'reply': reply, 'emotion': emotion, 'action': action, 'costume': costume,
-            'memories': memories}
+            'memories': memories, 'reminder': reminder}

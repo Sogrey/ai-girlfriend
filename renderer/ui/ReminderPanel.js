@@ -32,6 +32,19 @@ export function initReminderPanel() {
     bus.emit('chat:sys', { text: '⏰ ' + (msg.text || '') });
     if (!panelEl.classList.contains('hidden')) refresh();
   });
+
+  // a reminder was created through natural-language chat (Phase 33):
+  // brief system bubble + toast, and keep an open panel in sync.
+  bus.on('backend:reminder_added', (msg) => {
+    const rem = msg.reminder || {};
+    const line = rem.type === 'once'
+      ? '⏰ 已设提醒：一次'
+      : rem.type === 'daily' ? '⏰ 已设提醒：每天 ' + (rem.hhmm || '')
+      : '⏰ 已设提醒：每小时·第' + (rem.minute ?? 0) + '分';
+    bus.emit('chat:sys', { text: line + ' · ' + (rem.text || '') });
+    toast(line.slice(2));
+    if (!panelEl.classList.contains('hidden')) renderList(msg.items || []);
+  });
 }
 
 function refreshTypeInputs() {
