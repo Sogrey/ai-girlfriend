@@ -45,6 +45,16 @@ export function initReminderPanel() {
     toast(line.slice(2));
     if (!panelEl.classList.contains('hidden')) renderList(msg.items || []);
   });
+
+  // reminder(s) deleted through natural-language chat (Phase 34)
+  bus.on('backend:reminder_removed', (msg) => {
+    const rs = msg.removed || [];
+    const text = rs.length === 1
+      ? '🗑️ 已删除提醒：' + (rs[0].text || '')
+      : '🗑️ 已删除 ' + rs.length + ' 条提醒';
+    bus.emit('chat:sys', { text });
+    if (!panelEl.classList.contains('hidden')) renderList(msg.items || []);
+  });
 }
 
 function refreshTypeInputs() {

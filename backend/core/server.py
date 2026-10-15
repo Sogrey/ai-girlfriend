@@ -18,6 +18,7 @@ Backend -> Renderer:
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
   {type:'reminder_due', text, emotion, schedule}   # a scheduled reminder fired (text bubble + speech)
   {type:'reminder_added', reminder, items}    # a reminder was created via natural-language chat: toast + panel refresh
+  {type:'reminder_removed', removed, items}   # reminder(s) deleted via natural-language chat (Phase 34)
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
   {type:'stt_result', text}
   {type:'ai_response', reply, emotion, action, costume}
@@ -68,6 +69,9 @@ class BackendServer:
         # scheduled reminders (hourly/daily/once): fires as speech + a
         # text bubble so the feature also works while TTS is degraded
         self.reminders = ReminderStore()
+        # let her list/delete reminders in natural language (Phase 34):
+        # each turn's runtime block rides the current reminder summary
+        self.conv.reminder_brief = self._reminder_prompt_brief
 
     # ---------------- lifecycle ----------------
 
@@ -217,6 +221,7 @@ class BackendServer:
             await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
             return
         await self._apply_chat_reminder(ws, result)
+        await self._apply_chat_reminder_remove(ws, result)
         resp = dict(result)
         resp['type'] = 'ai_response'
         resp['_id'] = mid
@@ -266,6 +271,7 @@ class BackendServer:
                 await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
                 return
             await self._apply_chat_reminder(ws, result)
+            await self._apply_chat_reminder_remove(ws, result)
             resp = dict(result)
             resp['type'] = 'ai_response'
             resp['_id'] = mid
@@ -427,6 +433,18 @@ class BackendServer:
 
     # ---------------- scheduled reminders ----------------
 
+    def _reminder_prompt_brief(self):
+        """Current reminder list for the per-turn runtime block (Phase 34):
+        lets the LLM answer "我设了哪些提醒" naturally and pick the id of
+        the entry to delete. Returns None when empty (no noise)."""
+        items = self.reminders.to_list()
+        if not items:
+            return None
+        lines = ['## 你当前已登记的提醒（回答列表/删除问题只以本清单为准，历史对话里说过的删除、清空都不算数）']
+        for it in items:
+            lines.append('- id=%s | %s | %s' % (it['id'], it['schedule'], it['text']))
+        return '\n'.join(lines)
+
     async def _apply_chat_reminder(self, ws, result):
         """Natural-language reminder creation (Phase 33): when the LLM's
         reply carried a validated `reminder` intent, run it through the
@@ -451,6 +469,61 @@ class BackendServer:
                    'items': self.reminders.to_list()}
         for c in list(self.clients):
             await self.send(c, payload)
+
+    async def _apply_chat_reminder_remove(self, ws, result):
+        """Natural-language reminder deletion (Phase 34): execute the LLM's
+        validated `reminder_remove` intent (id exact / query fuzzy / all).
+        On success broadcast reminder_removed (chat:sys bubble + panel
+        refresh) to every client; on ambiguity/miss reply an error bubble
+        to the requester so she can correct herself next turn."""
+        intent = (result or {}).get('reminder_remove')
+        if not intent:
+            return
+        removed = []
+        if intent.get('all'):
+            if not self.reminders.items:
+                return
+            removed = list(self.reminders.items.values())
+            self.reminders.clear_all()
+        elif intent.get('id'):
+            rem = self.reminders.items.get(intent['id'])
+            if rem is not None and self.reminders.delete(intent['id']):
+                removed = [rem]
+            if not removed and intent.get('query'):
+                # LLM miscopied the id — fall back to the keyword it gave
+                # alongside (dual-channel intent, see system_prompt)
+                matches = self.reminders.find(intent['query'])
+                if len(matches) == 1:
+                    self.reminders.delete(matches[0]['id'])
+                    removed = matches
+                    logger.warning('chat reminder: id %s missed, query fallback hit',
+                                   intent['id'])
+            if not removed:
+                await self.send(ws, {'type': 'error', 'code': 'reminder',
+                                     'message': '提醒没删成：没找到对应的提醒，可以说得具体些或先让我列一遍'})
+                return
+        elif intent.get('query'):
+            matches = self.reminders.find(intent['query'])
+            if len(matches) == 1:
+                self.reminders.delete(matches[0]['id'])
+                removed = matches
+            elif len(matches) > 1:
+                await self.send(ws, {'type': 'error', 'code': 'reminder',
+                                     'message': '有多条提醒都像「%s」，说得更具体些或直接报内容' % intent['query']})
+                return
+            else:
+                await self.send(ws, {'type': 'error', 'code': 'reminder',
+                                     'message': '没找到叫「%s」的提醒，可以问我先列一遍现有的' % intent['query']})
+                return
+        if removed:
+            logger.info('chat reminder removed: %s', ','.join(r['id'] for r in removed))
+            payload = {'type': 'reminder_removed',
+                       'removed': [{'id': r['id'], 'type': r['type'],
+                                    'text': r.get('text', '')} for r in removed],
+                       'items': self.reminders.to_list()}
+            for c in list(self.clients):
+                await self.send(c, payload)
+
 
     async def _reminder_loop(self):
         """Scan reminders every 20s; when one fires, broadcast a text

@@ -111,6 +111,47 @@ def normalize_llm_reminder(data, now=None):
     return out
 
 
+REMINDER_REMOVE_ALL = {'all', '全部', '所有', '全部提醒', '所有提醒',
+                        '全部删除', '都删了', '都删掉', '全部都删了', '所有都删'}
+
+
+def normalize_llm_reminder_remove(data):
+    """Normalize the LLM's optional `reminder_remove` key (natural-
+    language reminder deletion, Phase 34) into an intent dict, or None
+    when absent/malformed. Accepted shapes (see system_prompt):
+      {"remove": "all"}              -> {'all': True}          delete everything
+      {"remove": "喝水"}              -> {'query': '喝水'}       fuzzy text match
+      {"id": "a1b2c3d4e5f6"}         -> {'id': '...'}           exact id (preferred)
+      {"id": "...", "remove": "喝水"} -> {'id': '...', 'query': '喝水'}
+        both filled: id first, query as fallback when the id misses
+        (guards against the LLM miscopying the 12-hex id)
+    """
+    if not isinstance(data, dict):
+        return None
+    out = {}
+    rid = data.get('id')
+    if isinstance(rid, str) and rid.strip():
+        out['id'] = rid.strip()[:32]
+    q = data.get('remove')
+    # the LLM also emits {"all": true} / {"all": "true"} for delete-everything
+    # — fold it into remove='all' (silently dropping this shape cost a whole
+    # debug hunt: she SAID "全部清掉" while nothing executed)
+    all_flag = data.get('all')
+    if isinstance(all_flag, str):
+        all_flag = all_flag.strip().lower() == 'true'
+    if all_flag is True and q is None:
+        q = 'all'
+    if isinstance(q, str) and q.strip():
+        q = q.strip()
+        if q.lower() in REMINDER_REMOVE_ALL and 'id' not in out:
+            return {'all': True, 'query': q}
+        if q.lower() not in REMINDER_REMOVE_ALL:
+            out['query'] = q[:60]
+    if 'id' not in out and 'query' not in out:
+        return None
+    return out
+
+
 def _parse_hhmm(v):
     """'HH:MM[:SS]' (or 'H:MM') -> 'HH:MM', or None."""
     if not isinstance(v, str):
@@ -232,5 +273,7 @@ def validate(data, raw_text=''):
                 break
     # natural-language reminder intent (Phase 33): normalized or None
     reminder = normalize_llm_reminder(data.get('reminder'))
+    # natural-language reminder deletion intent (Phase 34)
+    reminder_remove = normalize_llm_reminder_remove(data.get('reminder_remove'))
     return {'reply': reply, 'emotion': emotion, 'action': action, 'costume': costume,
-            'memories': memories, 'reminder': reminder}
+            'memories': memories, 'reminder': reminder, 'reminder_remove': reminder_remove}

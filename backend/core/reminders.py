@@ -21,6 +21,27 @@ import uuid
 
 logger = logging.getLogger('reminders')
 
+
+_DROP_CHARS = set(" \t\r\n，。！？、；：“”‘’（）【】《》[]{}<>.,!?;:'`~·~@#$%^&*+=|\\/"
+                  "的个每那条这条些全部提醒一下不想要了去掉删掉别再"
+                  "把帮忙撤取消设定还就快也吧呀嗯哦呢说叫会能")
+
+
+def _norm_key(s):
+    """Comparison key for fuzzy matching: drop whitespace, punctuation and
+    conversational filler particles so "把喝水的那个提醒删了" can hit
+    "{time} 了，喝水吧". Plain char-set pass — no regex escape traps."""
+    return ''.join(ch for ch in str(s) if ch not in _DROP_CHARS).lower()
+
+
+def _char_overlap(key, blob):
+    """Share of distinct key chars present in blob (fuzzy fallback when
+    substring match fails, e.g. '把睡眠那条删了' vs '早点睡觉哦')."""
+    chars = set(key)
+    if not chars:
+        return 0.0
+    return sum(1 for c in chars if c in blob) / len(chars)
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 REMINDERS_PATH = os.path.join(ROOT, 'config', 'reminders.json')
 
@@ -169,6 +190,32 @@ class ReminderStore:
             self.save()
             return True
         return False
+
+    def clear_all(self):
+        """Delete every reminder; returns how many were removed."""
+        n = len(self.items)
+        self.items.clear()
+        if n:
+            self.save()
+        return n
+
+    def find(self, query):
+        """Fuzzy-match reminders for natural-language deletion (Phase 34).
+        Substring match over normalized text+schedule first, char-overlap
+        >=0.7 as fallback. Returns the matched reminder list (may be 0/1/many).
+        """
+        key = _norm_key(query)
+        if not key:
+            return []
+        exact, fuzzy = [], []
+        for rem in self.items.values():
+            blob = _norm_key('%s %s %s' % (rem.get('text', ''),
+                                           describe(rem), rem.get('type', '')))
+            if key in blob:
+                exact.append(rem)
+            elif _char_overlap(key, blob) >= 0.7:
+                fuzzy.append(rem)
+        return exact or fuzzy
 
     # ---------------- triggering ----------------
 

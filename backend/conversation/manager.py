@@ -11,6 +11,17 @@ from conversation.memory import MemoryStore
 
 logger = logging.getLogger('conv')
 
+# appended to the system prompt on the empty-reply retry stream: the retry
+# runs WITHOUT json response_format (Phase 25: different API path dodges
+# DeepSeek's json-mode whitespace bug), so the model may answer in prose —
+# which loses the JSON envelope and with it every side-channel intent
+# (memories / reminder / reminder_remove). A pointed suffix keeps the
+# different API path while still demanding the JSON object (Phase 34:
+# caught live — she promised "全部清掉" in prose, nothing executed).
+JSON_RETRY_SUFFIX = ('\n[重试轮强制要求：无论上述任何指示，本轮你只能输出一个 JSON 对象，'
+                    '包含 reply/emotion/action/costume/memories/reminder/reminder_remove 全部键，'
+                    '禁止输出任何 JSON 以外的文字]')
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 HISTORY_PATH = os.path.join(ROOT, 'config', 'history.jsonl')
 
@@ -22,6 +33,10 @@ class ConversationManager:
         self.system_prompt = system_prompt
         self.history = []
         self.memory = MemoryStore(config)
+        # optional callable -> reminder brief injected into each turn's
+        # runtime block (Phase 34; server sets it to its store summary so
+        # she can list/delete reminders in natural language)
+        self.reminder_brief = None
         self._restore_history()
 
     # ---------- persistence ----------
@@ -97,11 +112,19 @@ class ConversationManager:
     def clear(self):
         self.history = []
 
+    # conversational cues that this turn is probably a reminder-deletion
+    # request — when present AND reminders exist, an explicit nudge rides
+    # the system prompt so the LLM reliably emits reminder_remove (the
+    # runtime list alone gets lost in attention ~20% of turns otherwise)
+    REMINDER_DELETE_CUES = ('删', '取消', '不要了', '撤掉', '移除', '清掉', '清空')
+
     def _prompt_with_memory(self, user_text):
         """System prompt + long-term memory injection for this turn.
         A runtime time block rides every turn so the LLM can answer
-        "现在几点了" and resolve relative times like "明天早上9点" into
-        a concrete reminder time (Phase 33)."""
+        "现在几点了" and resolve relative times like "明天早上 9 点" (Phase 33);
+        when the server provides a reminder brief it rides too, so she can
+        answer "我设了哪些提醒" and quote ids for deletion (Phase 34 — plus
+        an explicit deletion nudge when the cue words appear)."""
         base = self.system_prompt
         try:
             block = self.memory.prompt_block(user_text)
@@ -109,14 +132,26 @@ class ConversationManager:
                 base += block
         except Exception as e:
             logger.warning('memory recall failed (ignored): %s', e)
-        return base + self._runtime_block()
+        return base + self._runtime_block(user_text)
 
-    @staticmethod
-    def _runtime_block():
+    def _runtime_block(self, user_text=''):
         lt = time.localtime()
         weekday = ('周一', '周二', '周三', '周四', '周五', '周六', '周日')[lt.tm_wday]
         now = time.strftime('%Y-%m-%d %H:%M:%S', lt)
-        return f'\n\n## 当前环境\n现在是 {now} {weekday}。若用户提到相对时间（明天/今晚/半小时后等），请按此时间换算成具体时间再使用。'
+        block = f'\n\n## 当前环境\n现在是 {now} {weekday}。若用户提到相对时间（明天/今晚/半小时后等），请按此时间换算成具体时间再使用。'
+        if self.reminder_brief is not None:
+            try:
+                brief = self.reminder_brief()
+                if brief:
+                    block += '\n' + brief
+                    if user_text and any(c in user_text for c in self.REMINDER_DELETE_CUES):
+                        block += ('\n注意：用户这句话疑似想删除提醒。只以上面【当前】清单为准，不受对话历史里是否"删过"的影响——'
+                                  '只要当前清单里有匹配条目，就必须输出 reminder_remove（id+remove 双填，果断执行）；'
+                                  '仅当当前清单里确实没有用户所说的条目时，才回复说不存在。')
+            except Exception as e:
+                logger.warning('reminder brief failed (ignored): %s', e)
+        return block
+
 
     def _absorb_memories(self, result):
         """Store the memories the LLM extracted alongside its reply."""
@@ -176,8 +211,9 @@ class ConversationManager:
                 # The tracker is guaranteed empty here: any reply text seen
                 # in the first stream would have made validate()'s raw-text
                 # fallback non-empty, so no retry would have happened.
-                raw = await self.llm.chat_stream(self.history, self._prompt_with_memory(user_text),
-                                                 on_delta, use_json_format=False)
+                raw = await self.llm.chat_stream(
+                    self.history, self._prompt_with_memory(user_text) + JSON_RETRY_SUFFIX,
+                    on_delta, use_json_format=False)
                 data = extract_json(raw)
                 result = validate(data, raw)
                 self._absorb_memories(result)
