@@ -13,7 +13,7 @@
 | 桌面端 | Electron 34 + Three.js r174 + @pixiv/three-vrm 3.5 |
 | AI 大模型 | DeepSeek 在线 API（默认）/ Ollama 本地（可切换） |
 | 语音识别 | Faster-Whisper CUDA float16（本地 GPU 加速） |
-| 语音合成 | Edge-TTS（晓晓 / 晓伊 / 云健 / 晓涵 / 晓梦） |
+| 语音合成 | 五家可切：Edge-TTS（免费）/ Azure / OpenAI / ElevenLabs（在线）/ **GPT-SoVITS（本地免 Key 离线）** |
 | 口型同步 | Web Audio API 实时 FFT → VRM BlendShape |
 | 后端 | Python 3.12 + WebSocket 8765 |
 | 渲染 | 程序化骨骼动画（无动捕文件，纯数学驱动） |
@@ -117,6 +117,18 @@ ollama pull qwen3:4b
 ollama serve
 ```
 
+### 本地语音（GPT-SoVITS，免 Key 全离线）
+
+Edge 在线语音被微软拦截、又不想填任何 Key 时的本地保底路线，用参考音频零样本克隆出她的嗓音：
+
+1. **日常使用**：先双击 `scripts\启动GPT-SoVITS.bat`（等窗口显示 `Uvicorn running`，首次模型加载约 30 秒——**重开机后需重新跑一次**）
+2. 设置面板 → 语音合成 → 服务选 **GPT-SoVITS 本地** → 保存
+3. 对话即用本地嗓音出声，全程不联网、零 Key
+
+- **速度**：每句约 7~16 秒出声（本地 GPU 合成的物理代价，快路线填任一在线 Key 即可切回）
+- **换音色**：录一段 5~10 秒中文女声 wav → 设置面板填入“参考音频”路径与“参考音频对应文字”（逐字一致）→ 保存，立即换嗓；默认音色在 `assets/voices/ref_default.wav`
+- 本地环境已部署在 `D:\AI\GPT-SoVITS`（独立 venv + 预训练模型，不影响本项目环境）
+
 ### 修改角色人格
 
 - **角色名 / 你的称呼**：设置面板 → 女友
@@ -169,10 +181,10 @@ ai-girlfriend/
 │  └─ styles/                 ← 样式
 ├─ backend/
 │  ├─ main.py                 ← 后端入口
-│  ├─ core/                   ← WebSocket 服务 / 配置
+│  ├─ core/                   ← WebSocket 服务 / 配置 / 日程提醒引擎
 │  ├─ llm/                    ← DeepSeek + Ollama 双 Provider
 │  ├─ stt/                    ← Faster-Whisper CUDA 引擎
-│  ├─ tts/                    ← Edge-TTS Provider（可扩展）
+│  ├─ tts/                    ← 五家 Provider（Edge/Azure/OpenAI/ElevenLabs/GPT-SoVITS 本地）
 │  ├─ conversation/           ← 统一对话管道
 │  └─ actions/                 ← 意图校验 + 动作定义
 ├─ heart/
@@ -215,7 +227,9 @@ ai-girlfriend/
     "vad_enabled": true
   },
   "tts": {
-    "edge": { "voice": "zh-CN-XiaoxiaoNeural" }  // 晓晓/晓伊/云健/晓涵/晓梦
+    "provider": "edge",                  // edge / azure / openai / elevenlabs / gptsovits（本地）
+    "edge": { "voice": "zh-CN-XiaoxiaoNeural" },  // 晓晓/晓伊/云健/晓涵/晓梦
+    "gptsovits": { "ref_audio": "assets/voices/ref_default.wav", "ref_text": "参考音频里说的话" }
   },
   "hotkey": "Control+Alt+G"
 }
@@ -235,8 +249,8 @@ ai-girlfriend/
 │  Renderer (Chromium)          │◄──────► HTTPS
 │  Three.js + VRM 渲染           │       api.deepseek.com
 │  程序化动画 / 表情 / 口型同步   │       hf-mirror.com (Whisper 模型)
-│  眼神追踪 / 拖拽 / 语音 VAD     │       Edge-TTS 微软语音服务
-│  工具栏 / 聊天 / 设置          │
+│  眼神追踪 / 拖拽 / 语音 VAD     │       Edge-TTS 微软语音服务（可选）
+│  工具栏 / 聊天 / 设置 / 提醒    │       本地 9880 GPT-SoVITS（可选）
 └───────────────────────────────┘
 ```
 
@@ -342,7 +356,7 @@ npm config set registry https://registry.npmmirror.com
 | Python | 3.10 | 3.12 |
 | GPU | 集显（CPU 回退） | NVIDIA RTX 3060+ 6GB |
 | RAM | 8GB | 16GB+ |
-| 网络 | DeepSeek + Edge-TTS 需联网 | 全程国内镜像 |
+| 网络 | DeepSeek 需联网 | 国内镜像全覆盖；语音可全离线（GPT-SoVITS） |
 
 ---
 
