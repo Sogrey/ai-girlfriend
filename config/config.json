@@ -39,6 +39,11 @@
       "rate": "+0%",
       "volume": "+0%"
     },
+    "gptsovits": {
+      "base_url": "http://127.0.0.1:9880",
+      "ref_audio": "assets/voices/ref_default.wav",
+      "ref_text": "今天过得怎么样呀？我一直在这里等你呢。要是累了的话，就休息一会儿，我陪你聊聊天吧。"
+    },
     "volume": 0.9
   },
   "avatar": {

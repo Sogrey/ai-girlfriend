@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """WebSocket server on 127.0.0.1:8765.
 
 Protocol (all JSON):
@@ -22,7 +22,7 @@ Backend -> Renderer:
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
   {type:'stt_result', text}
   {type:'ai_response', reply, emotion, action, costume}
-  {type:'tts_audio', seq, final, data: <base64 mp3>}   # may arrive BEFORE
+  {type:'tts_audio', seq, final, data: <base64 mp3/wav per provider>}   # may arrive BEFORE
       ai_response: non-last sentences are synthesized while the LLM is
       still streaming (first-sentence-early TTS, see core/stream_tts.py)
   {type:'status', stt_ready, stt_device, stt_error, llm_provider, llm_health, tts_provider}
@@ -337,7 +337,7 @@ class BackendServer:
                 audio = await self.tts.synthesize(s, emotion=emotion)
                 b64 = base64.b64encode(audio).decode('ascii')
                 await self.send(ws, {
-                    'type': 'tts_audio', 'seq': i, 'final': final, 'format': 'mp3', 'data': b64,
+                    'type': 'tts_audio', 'seq': i, 'final': final, 'format': self.tts.media_type, 'data': b64,
                 })
             except TTSSilentError:
                 # breaker fast-fail: already alerted once for this streak —
@@ -406,7 +406,7 @@ class BackendServer:
                 audio = await self.tts.synthesize(sentence, emotion=emotion)
                 b64 = base64.b64encode(audio).decode('ascii')
                 await self.send(ws, {
-                    'type': 'tts_audio', 'seq': seq, 'final': final, 'format': 'mp3', 'data': b64,
+                    'type': 'tts_audio', 'seq': seq, 'final': final, 'format': self.tts.media_type, 'data': b64,
                 })
                 sent_any = True
                 if final:

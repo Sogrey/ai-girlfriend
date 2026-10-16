@@ -156,6 +156,7 @@
             <option value="azure">Azure 官方（需订阅 Key，更稳定）</option>
             <option value="openai">OpenAI 官方（需 API Key）</option>
             <option value="elevenlabs">ElevenLabs（需 API Key，音质最佳）</option>
+            <option value="gptsovits">GPT-SoVITS 本地（免 Key 全离线）</option>
           </select>
         </label>
         <div data-for="azure-tts">
@@ -196,6 +197,18 @@
               <option value="zh-CN-XiaohanNeural">晓涵 Xiaohan</option>
               <option value="zh-CN-XiaomengNeural">晓梦 Xiaomeng</option>
             </select>
+          </label>
+        </div>
+        <div data-for="gptsovits-tts">
+          <label>服务地址
+            <input id="set-gs-base-url" type="text" placeholder="默认 http://127.0.0.1:9880" />
+          </label>
+          <span class="hint">先运行 scripts\启动GPT-SoVITS.bat 起本地语音服务，等它显示 Uvicorn running 再保存切换</span>
+          <label>参考音频（决定她的音色）
+            <input id="set-gs-ref-audio" type="text" placeholder="默认 assets/voices/ref_default.wav，可换成自己的录音（5~10 秒中文女声）" />
+          </label>
+          <label>参考音频对应文字
+            <input id="set-gs-ref-text" type="text" placeholder="参考音频里说的话（必须逐字一致，克隆质量关键）" />
           </label>
         </div>
         <div data-for="elevenlabs-tts">

@@ -14,6 +14,7 @@ from tts.edge_provider import EdgeTTSProvider
 from tts.azure_provider import AzureTTSProvider
 from tts.openai_provider import OpenAITTSProvider
 from tts.elevenlabs_provider import ElevenLabsProvider
+from tts.gptsovits_provider import GPTSoVITSProvider
 
 logger = logging.getLogger('tts')
 
@@ -101,7 +102,13 @@ class TTSManager:
             # ('+10%' -> speed 1.1, clamped 0.7..1.2)
             el.setdefault('rate', rate)
             self.provider = ElevenLabsProvider(el)
-        # elif name == 'local': GPTSoVITSProvider(tts_cfg.get('local', {}))
+        elif name == 'gptsovits':
+            gs = dict(tts_cfg.get('gptsovits', {}))
+            # local zero-key route: voice = whatever the reference audio
+            # sounds like; only the speaking rate carries over ('+10%' ->
+            # speed 1.1, clamped 0.6..1.5)
+            gs.setdefault('rate', rate)
+            self.provider = GPTSoVITSProvider(gs)
         else:
             raise ValueError(f'未知的 TTS provider: {name}')
         self.provider_name = name
@@ -113,6 +120,13 @@ class TTSManager:
         base = parse_rate(self._rate())
         delta = EMOTION_RATE_DELTA.get(str(emotion or '').lower().strip(), 0)
         return f'{max(-50, min(50, base + delta)):+d}%'
+
+    @property
+    def media_type(self):
+        """Container of the bytes the active provider returns (edge/azure/
+        openai/elevenlabs => mp3; gptsovits => wav). Only a protocol label —
+        the renderer decodes by container sniffing."""
+        return getattr(self.provider, 'media_type', 'mp3')
 
     @property
     def error_alert_allowed(self):

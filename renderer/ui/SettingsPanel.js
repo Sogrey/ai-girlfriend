@@ -57,6 +57,7 @@ function refreshFields() {
     const show = f === 'azure-tts' ? tprov === 'azure'
                : f === 'openai-tts' ? tprov === 'openai'
                : f === 'elevenlabs-tts' ? tprov === 'elevenlabs'
+               : f === 'gptsovits-tts' ? tprov === 'gptsovits'
                : f === 'elevenlabs-voice' ? tprov === 'elevenlabs'
                : f === 'openai-voice' ? tprov === 'openai'
                : f === 'voice-ea' ? (tprov === 'edge' || tprov === 'azure')
@@ -80,6 +81,7 @@ function load() {
   const ttsAz = c.tts.azure || {};
   const ttsOi = c.tts.openai || {};
   const ttsEl = c.tts.elevenlabs || {};
+  const ttsGs = c.tts.gptsovits || {};
   setVal('set-tts-provider', c.tts.provider || 'edge');
   setVal('set-azure-key', ttsAz.subscription_key || '');
   setVal('set-azure-region', ttsAz.region || 'eastasia');
@@ -91,6 +93,9 @@ function load() {
   setVal('set-el-base-url', ttsEl.base_url || '');
   setVal('set-el-model', ttsEl.model || 'eleven_multilingual_v2');
   setVal('set-el-voice', ttsEl.voice_id || '21m00Tcm4TlvDq8ikWAM');
+  setVal('set-gs-base-url', ttsGs.base_url || 'http://127.0.0.1:9880');
+  setVal('set-gs-ref-audio', ttsGs.ref_audio || 'assets/voices/ref_default.wav');
+  setVal('set-gs-ref-text', ttsGs.ref_text || '');
   setVal('set-tts-voice', c.tts.voice || c.tts.edge.voice);
   setVal('set-tts-rate', c.tts.rate || c.tts.edge.rate);
   document.getElementById('set-tts-volume').value = Math.round((c.tts.volume || 0.9) * 100);
@@ -210,6 +215,18 @@ function save() {
           ...(elBase ? { base_url: elBase } : {}),
           model: getVal('set-el-model') || 'eleven_multilingual_v2',
           voice_id: getVal('set-el-voice') || '21m00Tcm4TlvDq8ikWAM',
+        };
+      }
+      // GPT-SoVITS local: all three omit-when-blank (defaults live in
+      // config.json; a blank save never blanks a stored path/transcript)
+      if (provider === 'gptsovits') {
+        const gsBase = (getVal('set-gs-base-url') || '').trim();
+        const gsRef = (getVal('set-gs-ref-audio') || '').trim();
+        const gsText = (getVal('set-gs-ref-text') || '').trim();
+        t.gptsovits = {
+          ...(gsBase ? { base_url: gsBase } : {}),
+          ...(gsRef ? { ref_audio: gsRef } : {}),
+          ...(gsText ? { ref_text: gsText } : {}),
         };
       }
       return t;
