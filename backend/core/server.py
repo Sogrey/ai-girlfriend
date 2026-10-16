@@ -32,6 +32,7 @@ import asyncio
 import base64
 import json
 import logging
+import struct
 
 import websockets
 
@@ -327,10 +328,20 @@ class BackendServer:
         await self.speak_reply(ws, text, emotion)
 
     async def speak_reply(self, ws, reply_text, emotion=None):
-        """Sentence-split a reply, synthesize each with TTS, stream mp3 chunks.
-        `emotion` nudges the speaking rate (see tts.manager.EMOTION_RATE_DELTA)."""
+        """Sentence-split a reply, synthesize each with TTS, stream chunks.
+        `emotion` nudges the speaking rate (see tts.manager.EMOTION_RATE_DELTA).
+        Streaming providers (gptsovits, Phase 37): each sentence becomes
+        multiple self-contained wav frames — the first frame goes out as
+        soon as the first chunk arrives (~4s into synthesis) and the NEXT
+        sentence is prefetched onto the GPU queue at that same moment
+        (api_v2 serializes requests, which turns the sentence chain into
+        one tight pipeline: measured inter-sentence gap ~0.9s). Classic
+        whole-sentence path is kept for the mp3 providers."""
         sentences = split_reply(reply_text)
         total = len(sentences)
+        if self.tts.streamable and not self.tts.fast_failing:
+            await self._speak_reply_streamed(ws, sentences, emotion)
+            return
         for i, s in enumerate(sentences):
             final = (i == total - 1)
             try:
@@ -352,6 +363,126 @@ class BackendServer:
                 if self.tts.error_alert_allowed:
                     await self.send(ws, {'type': 'error', 'code': 'tts',
                                          'message': '语音合成失败（恢复前不再重复提示，文字对话不受影响）：' + str(e)})
+
+    # ---------------- streaming TTS: wav re-framing (Phase 37) ----------------
+
+    WAV_HEADER_LEN = 44          # api_v2 emits a standard minimal wav header
+    STREAM_FRAME_MIN = 192000    # ~3s of 32k/16bit/mono PCM per mid-stream frame
+
+    async def _speak_reply_streamed(self, ws, sentences, emotion):
+        """Streaming speak_reply: per-sentence stream -> re-framed wav
+        tts_audio pushes + next-sentence prefetch after each first frame."""
+        seq = 0
+        sent_any = False
+        next_q = None
+        for i, s in enumerate(sentences):
+            final = (i == len(sentences) - 1)
+            if next_q is not None:
+                q = next_q
+                next_q = None
+            else:
+                q, _ = self._tts_stream_task(s, emotion)
+
+            def prefetch_hook(next_sentence=s, emotion=emotion):
+                nonlocal next_q
+                if next_sentence is not None and next_q is None:
+                    nq, _ = self._tts_stream_task(next_sentence, emotion)
+                    next_q = nq
+
+            hook = prefetch_hook if i + 1 < len(sentences) else None
+            try:
+                seq, sent = await self._consume_stream(ws, q, seq, final, on_first=hook)
+                sent_any = sent_any or sent
+                if sent:
+                    self.tts.note_success()
+            except Exception as e:
+                logger.error('TTS stream error on sentence %d: %s', i, e)
+                self.tts.note_failure()
+                if final:
+                    await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
+                    seq += 1
+                    sent_any = True
+                if self.tts.error_alert_allowed:
+                    await self.send(ws, {'type': 'error', 'code': 'tts',
+                                         'message': '语音合成失败（恢复前不再重复提示，文字对话不受影响）：' + str(e)})
+        if sentences and not sent_any:
+            # everything failed silently: still close the sequence
+            await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
+
+    def _tts_stream_task(self, sentence, emotion):
+        """Start ONE sentence's streaming synthesis in the background,
+        feeding raw http chunks into a queue. Items: bytes | Exception |
+        None(EOF). Returns (queue, task)."""
+        q = asyncio.Queue()
+
+        async def runner():
+            try:
+                kwargs = self.tts.stream_kwargs(emotion)
+                async for part in self.tts.provider.synthesize_stream(sentence, **kwargs):
+                    q.put_nowait(part)
+            except Exception as e:   # surfaced to the consumer via the queue
+                q.put_nowait(e)
+            else:
+                q.put_nowait(None)
+        return q, asyncio.ensure_future(runner())
+
+    async def _consume_stream(self, ws, q, seq, final, on_first=None, format_name=None):
+        """Drink one sentence's stream queue and emit re-framed tts_audio:
+        the accumulated PCM is sent as a self-contained wav frame the
+        moment the first chunk lands (then on_first fires — the prefetch
+        hook), further frames every STREAM_FRAME_MIN bytes, the tail frame
+        carries `final`. Empty tail closes with the classic empty-final
+        frame. Returns (next_seq, sent_any)."""
+        fmt = format_name or self.tts.media_type
+        header = None
+        buf = b''
+        first_sent = False
+        sent_any = False
+        while True:
+            item = await q.get()
+            if item is None:
+                break
+            if isinstance(item, BaseException):
+                raise item
+            buf += item
+            if header is None:
+                if len(buf) < self.WAV_HEADER_LEN:
+                    continue
+                header, buf = buf[:self.WAV_HEADER_LEN], buf[self.WAV_HEADER_LEN:]
+            if not first_sent:
+                if buf:
+                    await self._send_wav_frame(ws, header, buf, seq, final=False, fmt=fmt)
+                    seq += 1
+                    buf = b''
+                    first_sent = True
+                    sent_any = True
+                    if on_first:
+                        on_first()
+            elif len(buf) >= self.STREAM_FRAME_MIN:
+                await self._send_wav_frame(ws, header, buf, seq, final=False, fmt=fmt)
+                seq += 1
+                buf = b''
+                sent_any = True
+        # tail frame closes this sentence's audio
+        if buf:
+            await self._send_wav_frame(ws, header, buf, seq, final=final, fmt=fmt)
+            seq += 1
+            sent_any = True
+        else:
+            await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': final, 'data': ''})
+            seq += 1
+        return seq, sent_any
+
+    async def _send_wav_frame(self, ws, header, pcm, seq, final, fmt='wav'):
+        """header(44B)+pcm re-stamped into a valid standalone wav (RIFF/data
+        size fields rewritten) — the renderer's decodeAudioData plays each
+        frame like any normal chunk, so the pipeline needs zero frontend
+        changes."""
+        h = bytearray(header[:self.WAV_HEADER_LEN])
+        h[4:8] = struct.pack('<I', 36 + len(pcm))
+        h[40:44] = struct.pack('<I', len(pcm))
+        b64 = base64.b64encode(bytes(h) + pcm).decode('ascii')
+        await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': final, 'format': fmt, 'data': b64})
 
     # ---------------- streaming TTS (first-sentence-early) ----------------
 
@@ -393,40 +524,89 @@ class BackendServer:
         The final flag comes from the enqueuer (_flush_tts knows the
         total); if the stream aborts mid-way (LLM error / dropped
         remainder) the worker closes the sequence with an empty final
-        chunk so the renderer is never left waiting for audio."""
+        chunk so the renderer is never left waiting for audio.
+        Streaming providers (Phase 37): each sentence is re-framed into
+        multiple wav frames (`_consume_stream`), and the NEXT queued
+        sentence is prefetched onto the GPU right after a sentence's first
+        frame — the api_v2 request queue turns the sentence chain into a
+        tight pipeline."""
         seq = 0
         sent_any = False
         sent_final = False
+        _EMPTY = object()
+        prefetched = _EMPTY
+        use_stream = self.tts.streamable
         while True:
-            item = await queue.get()
+            if prefetched is not _EMPTY:
+                item, prefetched = prefetched, _EMPTY
+            else:
+                item = await queue.get()
             if item is None:
                 break
             sentence, emotion, final = item
+            if not use_stream:
+                # classic whole-sentence path (mp3 providers)
+                try:
+                    audio = await self.tts.synthesize(sentence, emotion=emotion)
+                    b64 = base64.b64encode(audio).decode('ascii')
+                    await self.send(ws, {
+                        'type': 'tts_audio', 'seq': seq, 'final': final, 'format': self.tts.media_type, 'data': b64,
+                    })
+                    sent_any = True
+                    if final:
+                        sent_final = True
+                except TTSSilentError:
+                    logger.warning('TTS breaker fast-fail on sentence %d', seq)
+                    if final:
+                        await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
+                        sent_any = True
+                        sent_final = True
+                except Exception as e:
+                    logger.error('TTS error on sentence %d: %s', seq, e)
+                    if final:
+                        await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
+                        sent_any = True
+                        sent_final = True
+                    if self.tts.error_alert_allowed:
+                        await self.send(ws, {'type': 'error', 'code': 'tts',
+                                             'message': '语音合成失败（恢复前不再重复提示，文字对话不受影响）：' + str(e)})
+                seq += 1
+                continue
+            # streaming provider path
+            if self.tts.fast_failing:
+                logger.warning('TTS breaker fast-fail (stream) on sentence %d', seq)
+                if final:
+                    await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
+                    sent_any = True
+                    sent_final = True
+                seq += 1
+                continue
+            q, _ = self._tts_stream_task(sentence, emotion)
+
+            def prefetch_hook(queue=queue):
+                nonlocal prefetched
+                if prefetched is _EMPTY and not queue.empty():
+                    prefetched = queue.get_nowait()
+
             try:
-                audio = await self.tts.synthesize(sentence, emotion=emotion)
-                b64 = base64.b64encode(audio).decode('ascii')
-                await self.send(ws, {
-                    'type': 'tts_audio', 'seq': seq, 'final': final, 'format': self.tts.media_type, 'data': b64,
-                })
-                sent_any = True
-                if final:
+                seq, sent = await self._consume_stream(ws, q, seq, final, on_first=prefetch_hook)
+                sent_any = sent_any or sent
+                if final and sent:
                     sent_final = True
-            except TTSSilentError:
-                logger.warning('TTS breaker fast-fail on sentence %d', seq)
-                if final:
-                    await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
-                    sent_any = True
-                    sent_final = True
+                if sent:
+                    self.tts.note_success()
             except Exception as e:
-                logger.error('TTS error on sentence %d: %s', seq, e)
+                logger.error('TTS stream error on sentence %d: %s', seq, e)
+                if not isinstance(e, TTSSilentError):
+                    self.tts.note_failure()
                 if final:
                     await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})
                     sent_any = True
                     sent_final = True
+                    seq += 1
                 if self.tts.error_alert_allowed:
                     await self.send(ws, {'type': 'error', 'code': 'tts',
                                          'message': '语音合成失败（恢复前不再重复提示，文字对话不受影响）：' + str(e)})
-            seq += 1
         if sent_any and not sent_final:
             # aborted before a final chunk went out — close the sequence
             await self.send(ws, {'type': 'tts_audio', 'seq': seq, 'final': True, 'data': ''})

@@ -129,6 +129,35 @@ class TTSManager:
         return getattr(self.provider, 'media_type', 'mp3')
 
     @property
+    def streamable(self):
+        """True when the active provider supports synthesize_stream()
+        (currently gptsovits; the chat/reaction pipelines then re-frame
+        the stream into multiple per-playable wav frames, Phase 37)."""
+        return hasattr(self.provider, 'synthesize_stream')
+
+    @property
+    def fast_failing(self):
+        """Circuit breaker open: callers that bypass synthesize() (the
+        streaming pipeline) check this to fast-fail silently."""
+        return time.monotonic() < self._trip_until
+
+    def note_success(self):
+        """Breaker bookkeeping for non-synthesize() call paths (streaming):
+        a success resets the failure streak."""
+        self._fail_streak = 0
+        self._trip_until = 0.0
+
+    def note_failure(self):
+        """Breaker bookkeeping for non-synthesize() call paths (streaming):
+        count a failure; trips the breaker exactly like synthesize() does."""
+        self._fail_streak += 1
+        if self._fail_streak >= self.FAIL_STREAK_TRIP:
+            self._trip_until = time.monotonic() + self.TRIP_SECONDS
+            logger.warning('TTS breaker OPEN after %d consecutive failures '
+                           '(fast-fail %.0fs, one-time alert already shown)',
+                           self._fail_streak, self.TRIP_SECONDS)
+
+    @property
     def error_alert_allowed(self):
         """One user-facing alert per failure streak: only the FIRST failure
         of a fresh streak (count resets on any success) bubbles to the UI;
@@ -150,13 +179,16 @@ class TTSManager:
         try:
             data = await self.provider.synthesize(text, **kwargs)
         except Exception:
-            self._fail_streak += 1
-            if self._fail_streak >= self.FAIL_STREAK_TRIP:
-                self._trip_until = time.monotonic() + self.TRIP_SECONDS
-                logger.warning('TTS breaker OPEN after %d consecutive failures '
-                               '(fast-fail %.0fs, one-time alert already shown)',
-                               self._fail_streak, self.TRIP_SECONDS)
+            self.note_failure()
             raise
-        self._fail_streak = 0
-        self._trip_until = 0.0
+        self.note_success()
         return data
+
+    def stream_kwargs(self, emotion):
+        """Rate kwargs for the streaming path (synthesize_stream takes the
+        same emotion/rate mapping as synthesize)."""
+        kwargs = {}
+        if emotion:
+            if EMOTION_RATE_DELTA.get(str(emotion).lower().strip(), 0):
+                kwargs['rate'] = self.rate_for_emotion(emotion)
+        return kwargs

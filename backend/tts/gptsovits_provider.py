@@ -184,6 +184,57 @@ class GPTSoVITSProvider(TTSProvider):
             raise ValueError('本地 GPT-SoVITS 服务未启动：自动拉起失败（可手动运行 scripts\\启动GPT-SoVITS.bat），'
                              '等命令行出现 9880 端口监听后再试')
 
+    async def synthesize_stream(self, text, **kwargs):
+        """STREAMING synthesis (Phase 37): yield raw response bytes as they
+        arrive. First yield starts with the 44-byte WAV header; the rest
+        are bare PCM chunks — the CALLER re-frames them (see
+        server._consume_stream). First chunk lands ~4s into a ~15s total
+        synthesis, which is the whole point of streaming. Self-heals on
+        ConnectError exactly like synthesize()."""
+        if not self.ref_audio or not os.path.isfile(self.ref_audio):
+            raise ValueError('GPT-SoVITS 参考音频不存在：' + (self.ref_audio or '(未配置)'))
+        speed = rate_to_speed(kwargs.get('rate', self.rate))
+        params = {
+            'text': str(text),
+            'text_lang': 'zh',
+            'ref_audio_path': self.ref_audio,
+            'prompt_text': self.ref_text,
+            'prompt_lang': 'zh',
+            'speed_factor': speed,
+            'streaming_mode': 'true',
+            'media_type': 'wav',
+        }
+        url = f'{self.base_url}/tts'
+        # read timeout must cover the COLD first chunk (model warm-up ~30s)
+        timeout = httpx.Timeout(connect=10.0, read=RETRY_TIMEOUT, write=10.0, pool=10.0)
+        try:
+            async with httpx.AsyncClient(timeout=timeout, transport=self._transport) as client:
+                async with client.stream('GET', url, params=params) as resp:
+                    if resp.status_code != 200:
+                        body = (await resp.aread())[:150]
+                        raise ValueError(f'GPT-SoVITS 错误 ({resp.status_code}): {body!r}')
+                    async for chunk in resp.aiter_bytes():
+                        if chunk:
+                            yield chunk
+        except httpx.ConnectError:
+            if self.auto_start:
+                logger.info('api_v2 unreachable (stream) — attempting self-heal start')
+                try:
+                    if await self._ensure_service():
+                        async with httpx.AsyncClient(timeout=timeout, transport=self._transport) as client:
+                            async with client.stream('GET', url, params=params) as resp:
+                                if resp.status_code != 200:
+                                    body = (await resp.aread())[:150]
+                                    raise ValueError(f'GPT-SoVITS 错误 ({resp.status_code}): {body!r}')
+                                async for chunk in resp.aiter_bytes():
+                                    if chunk:
+                                        yield chunk
+                        return
+                except httpx.ConnectError:
+                    pass
+            raise ValueError('本地 GPT-SoVITS 服务未启动：自动拉起失败（可手动运行 scripts\\启动GPT-SoVITS.bat），'
+                             '等命令行出现 9880 端口监听后再试')
+
     async def _get(self, url, params, timeout=120.0):
         try:
             async with httpx.AsyncClient(timeout=timeout, transport=self._transport) as client:
