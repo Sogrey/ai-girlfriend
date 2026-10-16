@@ -13,7 +13,7 @@
 | 桌面端 | Electron 34 + Three.js r174 + @pixiv/three-vrm 3.5 |
 | AI 大模型 | DeepSeek 在线 API（默认）/ Ollama 本地（可切换） |
 | 语音识别 | Faster-Whisper CUDA float16（本地 GPU 加速） |
-| 语音合成 | 五家可切：Edge-TTS（免费）/ Azure / OpenAI / ElevenLabs（在线）/ **GPT-SoVITS（本地免 Key 离线）** |
+| 语音合成 | 五家可切：Edge-TTS（免费）/ Azure / OpenAI / ElevenLabs（在线）/ **GPT-SoVITS（本地免 Key 离线，流式出声）** |
 | 口型同步 | Web Audio API 实时 FFT → VRM BlendShape |
 | 后端 | Python 3.12 + WebSocket 8765 |
 | 渲染 | 程序化骨骼动画（无动捕文件，纯数学驱动） |
@@ -125,7 +125,7 @@ Edge 在线语音被微软拦截、又不想填任何 Key 时的本地保底路�
 2. 对话即用本地嗓音出声，全程不联网、零 Key（服务会**自动拉起**，详见下方）
 
 - **自动恢复**：重开机/服务意外挂掉后，第一次对话会自动拉起本地语音服务（约 1~1.5 分钟，含冷启动 ~65s + 首句热身 ~30s），期间文字对话不受影响，第二次起明显变快
-- **速度**：稳态下每句约 4 秒合成、句间略有停顿——本地 GPU 合成的物理代价；想更快填任一在线 Key 即可切回
+- **速度（流式）**：合成边生成边播，开口约 2~5 秒（不再整段等 ~15 秒）、句间衔接顺畅（偶有 1~2 秒小停顿）；冷启动首句仍需热身 ~30 秒；想更快填任一在线 Key 即可切回
 - **换音色**：录一段 5~10 秒中文女声 wav → 设置面板填入"参考音频"路径与"参考音频对应文字"（逐字一致）→ 保存，立即换嗓；默认音色在 `assets/voices/ref_default.wav`
 - **手动控制**（可选）：`scripts\启动GPT-SoVITS.bat` 用来实时看服务日志或手动重启服务；平时无需理会
 - 本地环境已部署在 `D:\AI\GPT-SoVITS`（独立 venv + 预训练模型，不影响本项目环境）
