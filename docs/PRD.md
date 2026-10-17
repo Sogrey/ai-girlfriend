@@ -260,6 +260,7 @@
 | FR-1503 | 切换编排：build_config（角色 persona/人设 prompt/TTS 参考音色 deep-merge 到全局配置，空字段不覆盖）→ conv/reminders 重建 + tts 热切；选择持久化 user.json app.character_id（启动恢复）；character_switched 全客户端广播 | ✅ | 单测 12 项合并规则；E2E 双向切换；CDP F/G（真实 UI 切换/回切/聊天清空/选择记忆） |
 | FR-1504 | 自然语言召唤：多角色时每轮注入角色清单 brief，"叫小雪来"→ LLM 意图（action=switch_character + character 字段 id）；validate 严格门控（非 switch 动作的 character 字段强制丢弃防劫持）；渲染层 dispatcher 转发 switch_character 到后端 | ✅ | 单测 6 项意图门控；E2E D 组（真 DeepSeek 首发命中 + renderer 模拟执行）；CDP 意图链路 |
 | FR-1505 | 角色条 UI：工具栏 👥 按钮开关（与换装条互斥），动态拉取角色列表，当前角色高亮，点击后模型换载（档案配了 model 时；失败保留当前模型）+ 聊天清空 + 该角色历史回放 + toast + 回归动画 | ✅ | CDP F/G 全链路；无 model 档案（UI-only，如验收用小雪）零 VRM 依赖 |
+| FR-1506 | 角色管理面板（Phase 40）：角色条「管理」/ 设置「多角色管理…」双入口；列表模式（当前/默认徽标；主角色无编辑删除按钮）+ 表单模式（name 必填/id 新建可填编辑锁定自动生成/人设可载默认模板改造/专属模型与音色）；save 全量替换语义，保存当前角色人设音色即时热重载（不广播不清屏）；删除当前角色先切回主角色再删档案；删除保留该角色历史/记忆文件（同 id 重建可找回）；档案 ID 白名单防路径穿越 | ✅ | 10-17 Phase 40：单测 41/41（含 _scan 只增不减修复）+ 隔离 E2E 26/26 + CDP 16/16 + 部署回归 12/12（生产 save/delete 零残留冒烟）|
 
 ---
 
@@ -312,7 +313,7 @@
 |---|---|---|
 | R→B | `user_message` | `{text, screen?}` 文字对话；screen=👁 附上的 base64 JPEG，该轮走视觉两跳编排（Phase 38） |
 | R→B | `screenshot` | `{_id, data}` 对 request_screenshot 的应答（cue 路径，Phase 38） |
-| R→B | `get_characters` / `switch_character` | 角色列表 / `{id}` 切换多角色（Phase 39） |
+| R→B | `get_characters` / `switch_character` / `save_character` / `delete_character` / `get_character` | 角色列表 / `{id}` 切换 / 新建·更新档案 / 删除档案 / 单角色完整档案（Phase 39/40） |
 | R→B | `transcribe_audio` | `{data: base64 webm/opus}` 语音识别 |
 | R→B | `speak_line` | `{text, emotion}` 本地台词直读（摸头反应） |
 | R→B | `reload_config` / `ping` / `get_status` / `clear_history` / `get_history` | 控制（get_history：拉取持久化历史供重启回填） |
