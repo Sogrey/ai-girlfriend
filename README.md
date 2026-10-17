@@ -402,3 +402,17 @@ npm config set registry https://registry.npmmirror.com
 Private / Personal Use
 
 > AI生成
+---
+
+## 打包（portable 目录版）
+
+```bash
+npm install          # 安装依赖（含 electron-builder）
+npm run dist         # 打包 → dist/win-unpacked/AI-Girlfriend.exe
+```
+
+- 产物为免安装目录版：`dist\win-unpacked\` 整个文件夹拷走即可（双击 `AI-Girlfriend.exe`，桌宠窗口 + 托盘 + 快捷键与开发版一致）。
+- 语音/对话后端仍走本机 Python 环境（首次安装.bat 所装的 `.venv` + GPT-SoVITS），打包产物为"同机安装版"形态；用户密钥 `config/user.json` 与聊天记录不会打进包。
+- `three/examples`（GLTFLoader 等）经 `extraResources` 进入包内——electron-builder 默认会砍 `node_modules` 里的 examples 目录，勿删该配置。
+
+> AI生成

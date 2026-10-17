@@ -7,13 +7,38 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "dist": "electron-builder --dir",
     "postinstall": "node scripts/check-deps.js"
+  },
+  "build": {
+    "appId": "com.sogrey.ai-girlfriend",
+    "productName": "AI-Girlfriend",
+    "directories": { "output": "dist" },
+    "asar": false,
+    "files": [
+      "electron/**",
+      "renderer/**",
+      "heart/**",
+      "assets/**",
+      "prompts/**",
+      "backend/**",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "config/config.json", "to": "app/config/config.json" },
+      { "from": "node_modules/three/examples", "to": "app/node_modules/three/examples" }
+    ],
+    "win": {
+      "target": ["dir"],
+      "icon": "assets/icons/app-icon.png"
+    }
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.3.2",
     "three": "^0.174.0"
   },
   "devDependencies": {
-    "electron": "^34.0.0"
+    "electron": "^34.0.0",
+    "electron-builder": "^26.15.3"
   }
 }
