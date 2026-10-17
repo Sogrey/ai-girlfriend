@@ -6,10 +6,10 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "app://local/node_modules/three/build/three.module.js",
-      "three/": "app://local/node_modules/three/",
-      "three/examples/jsm/": "app://local/node_modules/three/examples/jsm/",
-      "@pixiv/three-vrm": "app://local/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"
+      "three": "/node_modules/three/build/three.module.js",
+      "three/": "/node_modules/three/",
+      "three/examples/jsm/": "/node_modules/three/examples/jsm/",
+      "@pixiv/three-vrm": "/node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"
     }
   }
   </script>
@@ -384,6 +384,9 @@
   <div id="fps-badge" class="fps-badge hidden" title="渲染帧率">--</div>
 
   <script>console.log('[page] inline script runs at', Date.now());</script>
+  <!-- Tauri shell bridge: provides window.desktop (preload parity). The
+       page itself lives at app://local/renderer/ so sibling-relative works. -->
+  <script src="core/desktop-bridge.js"></script>
   <script type="module" src="/renderer/app.js"></script>
 </body>
 </html>

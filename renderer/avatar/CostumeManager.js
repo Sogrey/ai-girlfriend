@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import { loadVRM } from './VRMFactory.js';
 import { bus } from '../core/EventBus.js';
 
-// Convert project-root-relative path (config) to app:// absolute URL.
-// The renderer page lives at app://local/renderer/index.html, so a bare
-// 'assets/...' would wrongly resolve against /renderer/ — we must use
-// app://local/assets/... explicitly.
+// Convert project-root-relative path (config) to a same-origin absolute URL.
+// The page root equals the repo root in BOTH shells — app://local/… under
+// Electron, and http://app.local/… under Tauri/WebView2 — so a root-relative
+// "/assets/…" resolves correctly everywhere (and never trips the http↔app
+// cross-scheme CORS that a literal app:// URL would hit under Tauri).
 function resolveAsset(p) {
   if (!p) return p;
   if (/^app:\/\//.test(p)) return p;
-  return 'app://local/' + String(p).replace(/^[\/\\]+/, '').replace(/\\/g, '/');
+  return '/' + String(p).replace(/^[\/\\]+/, '').replace(/\\/g, '/');
 }
 
 // Costume tint palettes used when a dedicated VRM file is missing.

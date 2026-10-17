@@ -1,44 +1,19 @@
 {
   "name": "desktop-ai-girlfriend",
-  "version": "1.0.0",
-  "description": "3D Desktop AI Girlfriend - Electron + Three.js VRM + Local LLM (Ollama) + Faster-Whisper + Edge-TTS",
-  "main": "electron/main.js",
-  "author": "user",
+  "version": "2.0.0",
+  "description": "3D Desktop AI Girlfriend - Tauri 2 + Three.js VRM + Python backend (DeepSeek + Faster-Whisper + GPT-SoVITS)",
   "private": true,
   "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder --dir",
+    "dev": "cargo run --manifest-path src-tauri/Cargo.toml",
+    "tauri": "tauri",
+    "tauri:build": "cargo build --release --manifest-path src-tauri/Cargo.toml",
     "postinstall": "node scripts/check-deps.js"
-  },
-  "build": {
-    "appId": "com.sogrey.ai-girlfriend",
-    "productName": "AI-Girlfriend",
-    "directories": { "output": "dist" },
-    "asar": false,
-    "files": [
-      "electron/**",
-      "renderer/**",
-      "heart/**",
-      "assets/**",
-      "prompts/**",
-      "backend/**",
-      "package.json"
-    ],
-    "extraResources": [
-      { "from": "config/config.json", "to": "app/config/config.json" },
-      { "from": "node_modules/three/examples", "to": "app/node_modules/three/examples" }
-    ],
-    "win": {
-      "target": ["dir"],
-      "icon": "assets/icons/app-icon.png"
-    }
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.3.2",
     "three": "^0.174.0"
   },
   "devDependencies": {
-    "electron": "^34.0.0",
-    "electron-builder": "^26.15.3"
+    "@tauri-apps/cli": "^2.15.0"
   }
 }

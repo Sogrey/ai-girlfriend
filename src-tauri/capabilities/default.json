@@ -1,0 +1,26 @@
+{
+  "identifier": "default",
+  "description": "AI Girlfriend windows. Pages are served from the custom app:// protocol (http://app.local under WebView2) — a remote origin for the IPC ACL, so the origin AND every application command permission must be allow-listed here (see build.rs AppManifest).",
+  "windows": ["main", "heart"],
+  "remote": {
+    "urls": ["http://app.local/*", "https://app.local/*"]
+  },
+  "permissions": [
+    "core:default",
+    "allow-config-get",
+    "allow-config-update",
+    "allow-window-info",
+    "allow-window-move-by",
+    "allow-window-apply-pos",
+    "allow-window-show",
+    "allow-window-set-ignore-mouse",
+    "allow-set-heart-mode",
+    "allow-set-launch-at-startup",
+    "allow-screen-capture",
+    "allow-quit-app",
+    "allow-open-devtools",
+    "allow-open-external",
+    "allow-heart-summon",
+    "allow-heart-set-hover"
+  ]
+}

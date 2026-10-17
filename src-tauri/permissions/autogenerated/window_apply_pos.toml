@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-window-apply-pos"
+description = "Enables the window_apply_pos command without any pre-configured scope."
+commands.allow = ["window_apply_pos"]
+
+[[permission]]
+identifier = "deny-window-apply-pos"
+description = "Denies the window_apply_pos command without any pre-configured scope."
+commands.deny = ["window_apply_pos"]

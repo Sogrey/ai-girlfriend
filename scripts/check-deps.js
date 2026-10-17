@@ -5,7 +5,7 @@ const root = path.join(__dirname, '..');
 const needed = [
   'node_modules/three/package.json',
   'node_modules/@pixiv/three-vrm/package.json',
-  'node_modules/electron/package.json',
+  'src-tauri/Cargo.toml',
 ];
 let missing = [];
 for (const p of needed) {

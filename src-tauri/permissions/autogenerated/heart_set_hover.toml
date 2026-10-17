@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-heart-set-hover"
+description = "Enables the heart_set_hover command without any pre-configured scope."
+commands.allow = ["heart_set_hover"]
+
+[[permission]]
+identifier = "deny-heart-set-hover"
+description = "Denies the heart_set_hover command without any pre-configured scope."
+commands.deny = ["heart_set_hover"]

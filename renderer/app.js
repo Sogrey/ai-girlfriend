@@ -143,7 +143,7 @@ async function boot() {
     // swap the VRM only when the character ships a model file of its own
     if (ch.model) {
       try {
-        const url = 'app://local/' + String(ch.model).replace(/^[\/\\]+/, '').replace(/\\/g, '/');
+        const url = '/' + String(ch.model).replace(/^[\/\\]+/, '').replace(/\\/g, '/');
         const { vrm } = await loadVRM(url);
         await avatar.setModel(vrm);
         console.log('[characters] model swapped ->', ch.model);

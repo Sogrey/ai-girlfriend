@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-heart-summon"
+description = "Enables the heart_summon command without any pre-configured scope."
+commands.allow = ["heart_summon"]
+
+[[permission]]
+identifier = "deny-heart-summon"
+description = "Denies the heart_summon command without any pre-configured scope."
+commands.deny = ["heart_summon"]

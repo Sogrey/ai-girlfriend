@@ -1,0 +1,22 @@
+{
+  "$schema": "https://v2.tauri.app/config/schema.json",
+  "productName": "AI Girlfriend",
+  "version": "2.0.0",
+  "identifier": "com.sogrey.ai-girlfriend",
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    }
+  },
+  "build": {
+    "frontendDist": "../renderer"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.png"]
+  }
+}
