@@ -102,6 +102,10 @@ function load() {
   document.getElementById('set-startup').checked = !!c.window.launch_at_startup;
   setVal('set-hotkey', c.hotkey || 'Control+Alt+G');
   document.getElementById('set-fps').checked = !!c.app.fps_overlay;
+  const vis = c.vision || {};
+  setVal('set-vision-key', vis.api_key || '');
+  setVal('set-vision-base-url', vis.base_url || 'https://open.bigmodel.cn/api/paas/v4');
+  setVal('set-vision-model', vis.model || 'glm-4v-flash');
   refreshFields();
   loaded = true;
 
@@ -233,6 +237,19 @@ function save() {
     })(),
     window: { launch_at_startup: document.getElementById('set-startup').checked },
     hotkey: (getVal('set-hotkey') || 'Control+Alt+G').trim() || 'Control+Alt+G',
+    // vision (Phase 38 screen awareness): key baseUrl omit-when-blank so a
+    // blank save never wipes a stored key/base_url; model select always
+    // carries a value. An EMPTY key keeps screen awareness disabled.
+    vision: (() => {
+      const vKey = (getVal('set-vision-key') || '').trim();
+      const vBase = (getVal('set-vision-base-url') || '').trim();
+      const vModel = getVal('set-vision-model') || 'glm-4v-flash';
+      return {
+        ...(vKey ? { api_key: vKey } : {}),
+        ...(vBase ? { base_url: vBase } : {}),
+        model: vModel,
+      };
+    })(),
     prompt: (() => {
       // blank OR identical to the built-in template = clear the override
       // (empty string falls back to the default file in load_prompt)

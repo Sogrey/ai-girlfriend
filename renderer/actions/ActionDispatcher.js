@@ -159,6 +159,14 @@ export class ActionDispatcher {
         this.playReturnAnim();
         break;
       }
+      case 'switch_character': {
+        // natural-language summon ("叫小雪来"): hand the switch to the
+        // backend; the broadcast character_switched event does the rest
+        // (model swap, chat refresh, persona reload)
+        const id = payload && payload.character;
+        if (id) this.backend.send({ type: 'switch_character', id });
+        break;
+      }
       case 'change_costume': {
         const id = payload.costume;
         if (!id || !this.costume.slots[id]) break;

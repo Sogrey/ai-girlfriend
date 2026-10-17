@@ -223,6 +223,12 @@ export function toggle() {
   return open;
 }
 
+// Character switch (Phase 39): wipe the visible chat (the new character's
+// own history is re-fetched right after by app.js).
+export function clearLog() {
+  if (logEl) logEl.innerHTML = '';
+}
+
 export function addUser(text, who = 'me') {
   const el = document.createElement('div');
   el.className = 'chat-msg ' + (who === 'me' ? 'user' : who === 'voice' ? 'user' : 'sys');

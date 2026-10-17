@@ -25,7 +25,9 @@
   <div id="toolbar" class="toolbar hidden">
     <button data-act="mic"      title="语音对话">🎤</button>
     <button data-act="chat"     title="文字聊天">💬</button>
+    <button data-act="screen"   title="让她看屏幕">👁</button>
     <button data-act="costume"  title="换装">👗</button>
+    <button data-act="character" title="切换角色">👥</button>
     <button data-act="leave"    title="让她休息">👋</button>
     <button data-act="settings" title="设置">⚙️</button>
   </div>
@@ -39,6 +41,13 @@
       <input id="chat-input" type="text" placeholder="说点什么…" autocomplete="off" />
       <button id="chat-send">发送</button>
     </div>
+  </div>
+
+  <!-- Screen-shot chip: shown while a capture from the eye button is
+       queued to ride the NEXT sent message (screen awareness, Phase 38) -->
+  <div id="screen-chip" class="screen-chip hidden">
+    👁 已截图，发送时她看这张屏幕
+    <button id="screen-chip-cancel" title="不带截图">×</button>
   </div>
 
   <!-- Reminder panel -->
@@ -92,6 +101,14 @@
     <button data-costume="stylish">时尚</button>
     <button data-costume="gothic">洋装</button>
     <button data-costume="seed">科技</button>
+    <button class="cb-close">×</button>
+  </div>
+
+  <!-- Character switcher bar (multi-character, Phase 39): populated at
+       boot / on open from get_characters; clicking asks the backend to
+       switch personas (isolated history/memory/voice per character) -->
+  <div id="character-bar" class="costume-bar hidden">
+    <span class="cb-title">角色</span>
     <button class="cb-close">×</button>
   </div>
 
@@ -265,6 +282,25 @@
           <button id="set-prompt-load-default" type="button">载入默认进行编辑</button>
           <button id="set-prompt-reset" type="button">恢复内置默认</button>
           <span class="hint">编辑后点底部「保存」生效，下一句话立即按新人设回复</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>视觉模型（屏幕感知）</legend>
+        <span class="hint">启用后她能看懂你的屏幕：点工具栏 👁 或直接说"你看我桌面这个报错"。推荐智谱 GLM-4V-Flash——open.bigmodel.cn 注册即完全免费，接口地址填官方默认即可。留空 Key = 未启用</span>
+        <label>API Key
+          <input id="set-vision-key" type="password" placeholder="智谱 open.bigmodel.cn 免费 Key（或任意 OpenAI 兼容视觉端点的 Key）" />
+        </label>
+        <label>接口地址
+          <input id="set-vision-base-url" type="text" placeholder="默认 https://open.bigmodel.cn/api/paas/v4（OpenAI 兼容中转也可）" />
+        </label>
+        <label>模型
+          <select id="set-vision-model">
+            <option value="glm-4v-flash">glm-4v-flash（智谱·免费·推荐）</option>
+            <option value="glm-4v-plus">glm-4v-plus（智谱·更强）</option>
+            <option value="qwen-vl-plus">qwen-vl-plus（通义·DashScope）</option>
+            <option value="qwen2.5-vl-72b-instruct">qwen2.5-vl-72b（硅基流动等中转）</option>
+          </select>
         </label>
       </fieldset>
 

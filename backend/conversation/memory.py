@@ -39,14 +39,18 @@ def _bigrams(s):
 
 
 class MemoryStore:
-    def __init__(self, config=None):
+    def __init__(self, config=None, path=None):
+        # `path` (Phase 39): per-character memory file; None => the shared
+        # default config/memory.json (backward compatible for the primary
+        # character and every existing test).
+        self.path = path or MEMORY_PATH
         self.facts = []  # [{"text": str, "ts": int, "score": int}]
         self._load()
 
     # ---------- persistence ----------
     def _load(self):
         try:
-            with open(MEMORY_PATH, 'r', encoding='utf-8') as f:
+            with open(self.path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             rows = data.get('facts') if isinstance(data, dict) else data
             if isinstance(rows, list):
@@ -63,10 +67,10 @@ class MemoryStore:
 
     def _save(self):
         try:
-            tmp = MEMORY_PATH + '.tmp'
+            tmp = self.path + '.tmp'
             with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump({'facts': self.facts}, f, ensure_ascii=False, indent=1)
-            os.replace(tmp, MEMORY_PATH)
+            os.replace(tmp, self.path)
         except Exception as e:
             logger.warning('cannot save memory: %s', e)
 
@@ -159,8 +163,8 @@ class MemoryStore:
     def clear(self):
         self.facts = []
         try:
-            if os.path.exists(MEMORY_PATH):
-                os.remove(MEMORY_PATH)
+            if os.path.exists(self.path):
+                os.remove(self.path)
         except Exception as e:
             logger.warning('cannot remove memory file: %s', e)
 

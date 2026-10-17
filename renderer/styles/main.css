@@ -178,6 +178,21 @@ html,body {
 .costume-bar button:hover { background:rgba(255,120,170,.4); }
 .costume-bar .cb-close { background:none; font-size:18px; padding:0 8px; }
 
+/* ---------- Screen-shot chip (screen awareness, Phase 38) ---------- */
+/* A small badge next to the chat input: the toolbar eye button queued a
+   screenshot that will ride the NEXT sent message. */
+.screen-chip {
+  position:fixed; z-index:46;
+  left: calc(var(--av-x, 1370px) - 200px);
+  bottom: calc((100vh - var(--av-head-y, 320px)) + 58px);
+  display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:14px;
+  background:rgba(60,30,50,.92); backdrop-filter:blur(12px); border:1px solid rgba(255,120,170,.55);
+  color:#ffd7e8; font-size:12px; white-space:nowrap;
+}
+.screen-chip button { border:none; background:rgba(255,255,255,.12); color:#fff; border-radius:50%;
+  width:18px; height:18px; line-height:16px; padding:0; cursor:pointer; font-size:13px; }
+.screen-chip button:hover { background:rgba(255,120,170,.5); }
+
 /* ---------- Settings ---------- */
 .settings-body { padding:12px 16px; max-height:calc(min(60vh, var(--av-head-y, 320px) - 96px) - 96px); overflow-y:auto; }
 fieldset { border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:12px; margin-bottom:12px; }

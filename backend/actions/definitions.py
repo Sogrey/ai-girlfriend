@@ -7,7 +7,7 @@ import time
 VALID_ACTIONS = {
     'idle', 'wave', 'leave', 'return', 'change_costume', 'comfort',
     'head_pat', 'jump', 'dance', 'think', 'nod', 'shake_head', 'blow_kiss',
-    'stretch', 'greet', 'spin',
+    'stretch', 'greet', 'spin', 'switch_character',
 }
 VALID_EMOTIONS = {'happy', 'shy', 'angry', 'sad', 'surprised', 'caring', 'neutral'}
 VALID_COSTUMES = {'casual', 'school', 'stylish', 'gothic', 'seed'}
@@ -30,6 +30,7 @@ ACTION_ALIASES = {
     'greeting': 'greet',
     'twirl': 'spin', 'turn_around': 'spin', 'turnaround': 'spin',
     'circle': 'spin',
+    'switchcharacter': 'switch_character', 'character': 'switch_character',
 }
 EMOTION_ALIASES = {
     'joy': 'happy', 'excited': 'happy', 'love': 'happy', 'embarrassed': 'shy',
@@ -275,5 +276,18 @@ def validate(data, raw_text=''):
     reminder = normalize_llm_reminder(data.get('reminder'))
     # natural-language reminder deletion intent (Phase 34)
     reminder_remove = normalize_llm_reminder_remove(data.get('reminder_remove'))
+    # character switch intent (Phase 39): the target id rides the reply
+    # only when the action actually asks for a switch, so a stray field
+    # can never hijack a normal turn
+    character = None
+    if action == 'switch_character':
+        ch = data.get('character')
+        if isinstance(ch, str):
+            ch = ch.strip()[:40]
+        if ch:
+            character = ch
+        else:
+            action = 'idle'
     return {'reply': reply, 'emotion': emotion, 'action': action, 'costume': costume,
-            'memories': memories, 'reminder': reminder, 'reminder_remove': reminder_remove}
+            'memories': memories, 'reminder': reminder, 'reminder_remove': reminder_remove,
+            'character': character}

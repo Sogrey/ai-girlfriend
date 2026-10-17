@@ -16,9 +16,11 @@ import { VoiceController } from './interaction/VoiceController.js';
 import { ActionDispatcher } from './actions/ActionDispatcher.js';
 import { initToast, show } from './ui/Toast.js';
 import { initToolbar } from './ui/Toolbar.js';
-import { initChatPanel, toggle as toggleChat, addAI as addAIBubble, addUser as addChatUser } from './ui/ChatPanel.js';
+import { initChatPanel, toggle as toggleChat, addAI as addAIBubble, addUser as addChatUser, clearLog as clearChatLog } from './ui/ChatPanel.js';
 import { initSettingsPanel, toggle as toggleSettings } from './ui/SettingsPanel.js';
 import { initReminderPanel } from './ui/ReminderPanel.js';
+
+import { loadVRM } from './avatar/VRMFactory.js';
 
 async function boot() {
   window.__backend = backend;
@@ -65,9 +67,109 @@ async function boot() {
 
   initToolbar({ voice, chat, settings, dispatcher, costume });
 
+  // ---- screen awareness (Phase 38) ----
+  // Toolbar 👁 → capture now; the NEXT sent message carries the image.
+  const screenChip = document.getElementById('screen-chip');
+  let pendingScreenShot = null;
+  window.__pendingScreen = null; // debug/CDP hook
+  function setPendingScreen(b64) {
+    pendingScreenShot = b64;
+    window.__pendingScreen = b64;
+    if (screenChip) screenChip.classList.toggle('hidden', !b64);
+  }
+  document.getElementById('screen-chip-cancel')?.addEventListener('click', () => setPendingScreen(null));
+  bus.on('screen:request', async () => {
+    if (!window.desktop.captureScreen) { show('当前环境不支持截屏', 'error', 4000); return; }
+    const r = await window.desktop.captureScreen();
+    if (!r || !r.ok) { show('截屏失败: ' + ((r && r.error) || '未知'), 'error', 4000); return; }
+    setPendingScreen(r.data);
+    show('已截图，输入想说的话，发送后她会结合屏幕回答', 'ok', 3500);
+    toggleChat();
+    const inp = document.getElementById('chat-input');
+    if (inp) inp.focus();
+  });
+  // backend asks us to capture (user phrase path): answer with {screenshot}
+  bus.on('backend:request_screenshot', async (msg) => {
+    const r = await window.desktop.captureScreen();
+    backend.send({ type: 'screenshot', _id: msg && msg._id, data: (r && r.ok) ? r.data : null });
+  });
+  bus.on('backend:screen_looking', () => show('她正在看屏幕…', 'ok', 2500));
+
+  // ---- multi-character (Phase 39) ----
+  let currentCharacterId = null;
+
+  function renderCharacterBar(items, current) {
+    const bar = document.getElementById('character-bar');
+    if (!bar) return;
+    const close = bar.querySelector('.cb-close');
+    bar.querySelectorAll('button[data-character]').forEach((b) => b.remove());
+    for (const it of items || []) {
+      const btn = document.createElement('button');
+      btn.dataset.character = it.id;
+      const label = it.name + (it.desc ? ' · ' + it.desc : '');
+      btn.textContent = label;
+      btn.title = it.id;
+      if (it.id === current) btn.style.background = 'rgba(255,120,170,.5)';
+      bar.insertBefore(btn, close);
+    }
+  }
+
+  bus.on('character:menu_open', async () => {
+    try {
+      const m = await backend.request({ type: 'get_characters' });
+      renderCharacterBar(m.items, m.current);
+    } catch (e) { console.warn('[characters] list failed', e); }
+  });
+
+  bus.on('character:select', ({ id }) => {
+    if (id === currentCharacterId) return;
+    backend.send({ type: 'switch_character', id });
+  });
+
+  async function applySwitchedCharacter(ch) {
+    if (!ch || !ch.id) return;
+    const switched = ch.id !== currentCharacterId;
+    currentCharacterId = ch.id;
+    // swap the VRM only when the character ships a model file of its own
+    if (ch.model) {
+      try {
+        const url = 'app://local/' + String(ch.model).replace(/^[\/\\]+/, '').replace(/\\/g, '/');
+        const { vrm } = await loadVRM(url);
+        await avatar.setModel(vrm);
+        console.log('[characters] model swapped ->', ch.model);
+      } catch (e) {
+        console.warn('[characters] model swap failed (keeping current model):', e.message);
+      }
+    }
+    if (switched) {
+      clearChatLog();
+      show('已切换到「' + (ch.name || ch.id) + '」', 'ok', 2500);
+      // replay the switched character's own history
+      try {
+        const m = await backend.request({ type: 'get_history' });
+        const items = m && m.items;
+        if (Array.isArray(items)) {
+          for (const it of items) {
+            if (it.role === 'user') addChatUser(it.content, 'me');
+            else if (it.role === 'assistant') addAIBubble(it.content, null);
+          }
+        }
+      } catch {}
+      animation.play('return', { dur: 2.6, onDone: () => emotion.set('happy', { hold: 3 }) });
+    }
+  }
+
+  bus.on('backend:character_switched', (msg) => { applySwitchedCharacter(msg.character); });
+
   // ---- wire bus events ----
   bus.on('action:request', ({ action, payload }) => dispatcher.run(action, payload || {}));
-  bus.on('backend:send_user', ({ text }) => backend.send({ type: 'user_message', text }));
+  bus.on('backend:send_user', ({ text }) => {
+    const msg = { type: 'user_message', text };
+    // attach the queued toolbar-eye screenshot so this turn becomes a
+    // screen-aware turn (consumed once, then cleared)
+    if (pendingScreenShot) { msg.screen = pendingScreenShot; setPendingScreen(null); }
+    backend.send(msg);
+  });
   bus.on('backend:send', (msg) => backend.send(msg));
 
   // settings saved in the panel -> apply TTS playback volume immediately
@@ -99,13 +201,14 @@ async function boot() {
   });
   bus.on('backend:ai_response', (msg) => {
     dispatcher.applyEmotion(msg.emotion);
-    if (msg.action && msg.action !== 'idle') dispatcher.run(msg.action, { costume: msg.costume });
+    if (msg.action && msg.action !== 'idle') dispatcher.run(msg.action, { costume: msg.costume, character: msg.character });
   });
   bus.on('backend:tts_audio', (msg) => {
     lipsync.speak(msg.data, { seq: msg.seq || 0, final: msg.final !== false });
   });
   bus.on('backend:status', (msg) => {
     if (msg.stt_ready === false) show('语音识别引擎: ' + (msg.stt_error || '未就绪'), 'warn', 4000);
+    if (msg.character) applySwitchedCharacter(msg.character);   // boot/first contact
   });
   bus.on('backend:error', (msg) => {
     // Show backend/LLM errors as her reply bubble inside the chat panel

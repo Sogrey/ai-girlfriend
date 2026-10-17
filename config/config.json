@@ -48,6 +48,12 @@
     },
     "volume": 0.9
   },
+  "vision": {
+    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+    "api_key": "",
+    "model": "glm-4v-flash",
+    "timeout_seconds": 60
+  },
   "avatar": {
     "default_costume": "casual",
     "fallback_model": "assets/models/default.vrm",

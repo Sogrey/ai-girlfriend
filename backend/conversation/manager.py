@@ -19,7 +19,7 @@ logger = logging.getLogger('conv')
 # different API path while still demanding the JSON object (Phase 34:
 # caught live — she promised "全部清掉" in prose, nothing executed).
 JSON_RETRY_SUFFIX = ('\n[重试轮强制要求：无论上述任何指示，本轮你只能输出一个 JSON 对象，'
-                    '包含 reply/emotion/action/costume/memories/reminder/reminder_remove 全部键，'
+                    '包含 reply/emotion/action/costume/memories/reminder/reminder_remove/character 全部键，'
                     '禁止输出任何 JSON 以外的文字]')
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -27,16 +27,24 @@ HISTORY_PATH = os.path.join(ROOT, 'config', 'history.jsonl')
 
 
 class ConversationManager:
-    def __init__(self, config, llm_manager, system_prompt):
+    def __init__(self, config, llm_manager, system_prompt,
+                 history_path=None, memory_path=None):
         self.config = config
         self.llm = llm_manager
         self.system_prompt = system_prompt
+        # per-character persistence targets (Phase 39): None => the shared
+        # default files (history.jsonl / memory.json), which is exactly the
+        # legacy behavior for the primary character.
+        self.history_path = history_path or HISTORY_PATH
         self.history = []
-        self.memory = MemoryStore(config)
+        self.memory = MemoryStore(config, path=memory_path)
         # optional callable -> reminder brief injected into each turn's
         # runtime block (Phase 34; server sets it to its store summary so
         # she can list/delete reminders in natural language)
         self.reminder_brief = None
+        # optional callable -> character roster brief (Phase 39): the LLM
+        # uses it to emit the switch_character intent ("叫小雪来")
+        self.character_brief = None
         self._restore_history()
 
     # ---------- persistence ----------
@@ -51,7 +59,7 @@ class ConversationManager:
         If the file exceeds FILE_KEEP rows it is compacted in place."""
         try:
             rows = []
-            with open(HISTORY_PATH, 'r', encoding='utf-8') as f:
+            with open(self.history_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -64,11 +72,11 @@ class ConversationManager:
                         rows.append({'role': r['role'], 'content': r['content']})
             if len(rows) > self.FILE_KEEP:
                 try:
-                    tmp = HISTORY_PATH + '.tmp'
+                    tmp = self.history_path + '.tmp'
                     with open(tmp, 'w', encoding='utf-8') as f:
                         for r in rows[-self.FILE_KEEP:]:
                             f.write(json.dumps(r, ensure_ascii=False) + '\n')
-                    os.replace(tmp, HISTORY_PATH)
+                    os.replace(tmp, self.history_path)
                     logger.info('history.jsonl compacted to last %d rows (was %d)', self.FILE_KEEP, len(rows))
                 except Exception as e:
                     logger.warning('cannot compact history file: %s', e)
@@ -83,7 +91,7 @@ class ConversationManager:
 
     def _persist(self, role, content):
         try:
-            with open(HISTORY_PATH, 'a', encoding='utf-8') as f:
+            with open(self.history_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({'ts': int(time.time()), 'role': role, 'content': content}, ensure_ascii=False) + '\n')
         except Exception as e:
             logger.warning('cannot persist history: %s', e)
@@ -96,8 +104,8 @@ class ConversationManager:
         self.history = []
         # also wipe the persisted file
         try:
-            if os.path.exists(HISTORY_PATH):
-                os.remove(HISTORY_PATH)
+            if os.path.exists(self.history_path):
+                os.remove(self.history_path)
         except Exception as e:
             logger.warning('cannot remove history file: %s', e)
 
@@ -109,22 +117,23 @@ class ConversationManager:
         self.config = config
         self.system_prompt = system_prompt
 
-    def clear(self):
-        self.history = []
-
     # conversational cues that this turn is probably a reminder-deletion
     # request — when present AND reminders exist, an explicit nudge rides
     # the system prompt so the LLM reliably emits reminder_remove (the
     # runtime list alone gets lost in attention ~20% of turns otherwise)
     REMINDER_DELETE_CUES = ('删', '取消', '不要了', '撤掉', '移除', '清掉', '清空')
 
-    def _prompt_with_memory(self, user_text):
+    def _prompt_with_memory(self, user_text, extra_context=None):
         """System prompt + long-term memory injection for this turn.
         A runtime time block rides every turn so the LLM can answer
         "现在几点了" and resolve relative times like "明天早上 9 点" (Phase 33);
         when the server provides a reminder brief it rides too, so she can
         answer "我设了哪些提醒" and quote ids for deletion (Phase 34 — plus
-        an explicit deletion nudge when the cue words appear)."""
+        an explicit deletion nudge when the cue words appear).
+        `extra_context` (Phase 38): an extra runtime block for this single
+        turn only — e.g. the vision model's description of the user's
+        screen. It rides the prompt but is NEVER persisted (history keeps
+        the user's words verbatim, the screenshot is not stored either)."""
         base = self.system_prompt
         try:
             block = self.memory.prompt_block(user_text)
@@ -132,6 +141,9 @@ class ConversationManager:
                 base += block
         except Exception as e:
             logger.warning('memory recall failed (ignored): %s', e)
+        if extra_context:
+            base += ('\n\n## 当前屏幕画面（视觉模型刚看过的实时描述，结合它回答用户这一句）\n'
+                     + str(extra_context).strip())
         return base + self._runtime_block(user_text)
 
     def _runtime_block(self, user_text=''):
@@ -150,6 +162,13 @@ class ConversationManager:
                                   '仅当当前清单里确实没有用户所说的条目时，才回复说不存在。')
             except Exception as e:
                 logger.warning('reminder brief failed (ignored): %s', e)
+        if self.character_brief is not None:
+            try:
+                cb = self.character_brief()
+                if cb:
+                    block += '\n' + cb
+            except Exception as e:
+                logger.warning('character brief failed (ignored): %s', e)
         return block
 
 
@@ -164,7 +183,7 @@ class ConversationManager:
         except Exception as e:
             logger.warning('memory absorb failed (ignored): %s', e)
 
-    async def chat(self, user_text, source='text'):
+    async def chat(self, user_text, source='text', extra_context=None):
         """
         Full pipeline: user text -> LLM -> validated response dict.
         History keeps last `max_history` entries.
@@ -174,7 +193,7 @@ class ConversationManager:
         # keep memory bounded
         if len(self.history) > self.max_history * 2:
             self.history = self.history[-self.max_history:]
-        raw = await self.llm.chat(self.history, self._prompt_with_memory(user_text))
+        raw = await self.llm.chat(self.history, self._prompt_with_memory(user_text, extra_context))
         data = extract_json(raw)
         result = validate(data, raw)
         self._absorb_memories(result)
@@ -184,17 +203,19 @@ class ConversationManager:
         self._persist('assistant', result['reply'])
         return result
 
-    async def chat_stream(self, user_text, source='text', on_delta=None):
+    async def chat_stream(self, user_text, source='text', on_delta=None, extra_context=None):
         """Streaming chat: on_delta(partial_raw) fires as raw chunks arrive.
         The raw text is JSON (system prompt) so the UI shows it typewriter-
         style; the final parse below produces the structured result.
         Empty replies (reasoning ate the whole token budget, API hiccup) get
-        one silent retry, then a graceful fallback line — never a blank bubble."""
+        one silent retry, then a graceful fallback line — never a blank bubble.
+        `extra_context` rides this turn's system prompt only (Phase 38,
+        screen description), never the history."""
         self.history.append({'role': 'user', 'content': user_text})
         self._persist('user', user_text)
         if len(self.history) > self.max_history * 2:
             self.history = self.history[-self.max_history:]
-        raw = await self.llm.chat_stream(self.history, self._prompt_with_memory(user_text), on_delta)
+        raw = await self.llm.chat_stream(self.history, self._prompt_with_memory(user_text, extra_context), on_delta)
         data = extract_json(raw)
         result = validate(data, raw)
         self._absorb_memories(result)
@@ -212,7 +233,7 @@ class ConversationManager:
                 # in the first stream would have made validate()'s raw-text
                 # fallback non-empty, so no retry would have happened.
                 raw = await self.llm.chat_stream(
-                    self.history, self._prompt_with_memory(user_text) + JSON_RETRY_SUFFIX,
+                    self.history, self._prompt_with_memory(user_text, extra_context) + JSON_RETRY_SUFFIX,
                     on_delta, use_json_format=False)
                 data = extract_json(raw)
                 result = validate(data, raw)

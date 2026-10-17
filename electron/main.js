@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, Tray, Menu, globalShortcut, screen,
-  ipcMain, protocol, session, nativeImage, shell,
+  ipcMain, protocol, session, nativeImage, shell, desktopCapturer,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -379,6 +379,30 @@ function setupIpc() {
   ipcMain.handle('app:setLaunchAtStartup', (_e, enabled) => {
     app.setLoginItemSettings({ openAtLogin: !!enabled });
     return true;
+  });
+  // Screen capture for screen-awareness (Phase 38): grabs the PRIMARY
+  // display as a downscaled JPEG (1120px class — the sweet spot for
+  // glm-4v/qwen-vl class vision models), returned as base64. Only ever
+  // requested on explicit user action (toolbar eye button / a matching
+  // user phrase); the image goes to the configured vision endpoint and is
+  // never written to disk.
+  ipcMain.handle('screen:capture', async () => {
+    try {
+      const primary = screen.getPrimaryDisplay().id;
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: 1120, height: 1120 },
+      });
+      const src = sources.find((s) => String(s.display_id) === String(primary)) || sources[0];
+      if (!src) return { ok: false, error: '没有可用的屏幕采集源' };
+      // toJPEG quality is an INTEGER 0..100 (a float throws a native
+      // conversion error — caught by the standalone capture probe)
+      const jpeg = src.thumbnail.toJPEG(85);
+      if (!jpeg || !jpeg.length) return { ok: false, error: '截图内容为空' };
+      return { ok: true, data: jpeg.toString('base64') };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
   });
   ipcMain.on('app:quit', () => app.quit());
   ipcMain.on('dev:openDevTools', () => { if (mainWindow) mainWindow.webContents.openDevTools({ mode: 'detach' }); });

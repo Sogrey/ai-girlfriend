@@ -1,6 +1,6 @@
 import { bus } from '../core/EventBus.js';
 
-let toolbarEl, costumeBarEl;
+let toolbarEl, costumeBarEl, characterBarEl;
 let near = false;
 let panelOpen = false;
 let hideTimer = null;
@@ -8,6 +8,7 @@ let hideTimer = null;
 export function initToolbar({ voice, chat, settings, dispatcher, costume }) {
   toolbarEl = document.getElementById('toolbar');
   costumeBarEl = document.getElementById('costume-bar');
+  characterBarEl = document.getElementById('character-bar');
 
   // proximity from avatar drives toolbar fade
   bus.on('avatar:proximity', ({ near: n }) => {
@@ -30,8 +31,17 @@ export function initToolbar({ voice, chat, settings, dispatcher, costume }) {
       case 'chat':
         chat.toggle();
         break;
+      case 'screen':
+        bus.emit('screen:request');
+        break;
       case 'costume':
+        toggleBar(costumeBarEl, false);
         toggleCostumeBar();
+        break;
+      case 'character':
+        toggleCostumeBar(false);
+        toggleBar(characterBarEl, true);   // re-populate on every open
+        bus.emit('character:menu_open');
         break;
       case 'leave':
         dispatcher.run('leave');
@@ -50,6 +60,21 @@ export function initToolbar({ voice, chat, settings, dispatcher, costume }) {
     }
     if (e.target?.classList?.contains('cb-close')) toggleCostumeBar(false);
   });
+
+  characterBarEl.addEventListener('click', (e) => {
+    const cid = e.target?.dataset?.character;
+    if (cid) {
+      bus.emit('character:select', { id: cid });
+      toggleBar(characterBarEl, false);
+    }
+    if (e.target?.classList?.contains('cb-close')) toggleBar(characterBarEl, false);
+  });
+
+  function toggleBar(el, force) {
+    const open = force === undefined ? el.classList.contains('hidden') : force;
+    if (open) { el.classList.remove('hidden'); bus.emit('panel:open'); }
+    else { el.classList.add('hidden'); bus.emit('panel:close'); }
+  }
 
   function toggleCostumeBar(force) {
     const open = force === undefined ? costumeBarEl.classList.contains('hidden') : force;

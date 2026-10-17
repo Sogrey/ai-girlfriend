@@ -3,8 +3,17 @@
 
 Protocol (all JSON):
 Renderer -> Backend:
-  {type:'user_message', text}            # may create a reminder when the LLM
-                                         # emits a `reminder` intent (Phase 33)
+  {type:'user_message', text, screen?}      # screen = base64 jpeg attached by the
+                                            # toolbar eye button (Phase 38); the
+                                            # vision model describes it and the
+                                            # description rides this turn's prompt.
+                                            # A user phrase matching the screen-cue
+                                            # regex triggers the same flow WITHOUT
+                                            # an attached image (backend then pushes
+                                            # request_screenshot). May create a
+                                            # reminder when the LLM emits a
+                                            # `reminder` intent (Phase 33).
+  {type:'screenshot', data}                 # renderer's answer to request_screenshot
   {type:'transcribe_partial', data: <base64 webm/opus>, format:'webm'}   # live partial while speaking
   {type:'transcribe_audio', data: <base64 webm/opus>, format:'webm'}    # final utterance -> STT -> LLM
   {type:'speak_line', text, emotion}          # local reaction lines (head pat etc.)
@@ -16,6 +25,9 @@ Renderer -> Backend:
 
 Backend -> Renderer:
   {type:'stt_partial', text}                  # live transcription preview (may arrive BEFORE stt_result)
+  {type:'request_screenshot', _id}            # screen flow: capture the screen & answer
+                                              # with {type:'screenshot', _id, data} (Phase 38)
+  {type:'screen_looking'}                     # she is looking at the screen (toast feedback)
   {type:'reminder_due', text, emotion, schedule}   # a scheduled reminder fired (text bubble + speech)
   {type:'reminder_added', reminder, items}    # a reminder was created via natural-language chat: toast + panel refresh
   {type:'reminder_removed', removed, items}   # reminder(s) deleted via natural-language chat (Phase 34)
@@ -32,6 +44,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import struct
 
 import websockets
@@ -39,10 +52,12 @@ import websockets
 from core.settings import load_config, load_prompt, load_default_prompt_template
 from core.reminders import ReminderStore
 from core.stream_tts import ReplySentenceTracker, split_reply
+from core.characters import CharacterStore, remember_character, PRIMARY_ID
 from llm.manager import LLMManager
 from stt.whisper_engine import WhisperEngine
 from tts.manager import TTSManager, TTSSilentError
 from conversation.manager import ConversationManager
+from vision.provider import VisionProvider
 
 logger = logging.getLogger('server')
 
@@ -57,9 +72,18 @@ class BackendServer:
         self.llm = LLMManager(self.config)
         self.stt = WhisperEngine(self.config)
         self.tts = TTSManager(self.config)
-        self.conv = ConversationManager(self.config, self.llm, self.system_prompt)
         self.clients = set()
         self._stt_started = False
+        # multi-character (Phase 39): the selected character's persona/
+        # voice/persistence are applied on boot; switching rebuilds the
+        # conversation store (isolated history/memory) and the reminder
+        # store too. The PRIMARY character maps onto the legacy files, so
+        # existing data keeps working without migration.
+        self.characters = CharacterStore(self.config)
+        wanted = (self.config.get('app', {}) or {}).get('character_id') or PRIMARY_ID
+        self.current_character_id = wanted if self.characters.exists(wanted) else PRIMARY_ID
+        self.character_meta, self.conv, self.reminders = self._build_role(self.current_character_id)
+        self.system_prompt = self.conv.system_prompt
         # streaming STT: one transcription at a time (model is not thread-safe,
         # GPU is a single lane), latest-partial-wins coalescing, epoch drops
         # partials superseded by a final transcription
@@ -67,12 +91,97 @@ class BackendServer:
         self._pending_partial = None
         self._partial_task = None
         self._stt_epoch = 0
-        # scheduled reminders (hourly/daily/once): fires as speech + a
-        # text bubble so the feature also works while TTS is degraded
-        self.reminders = ReminderStore()
-        # let her list/delete reminders in natural language (Phase 34):
-        # each turn's runtime block rides the current reminder summary
-        self.conv.reminder_brief = self._reminder_prompt_brief
+        # screen awareness (Phase 38): vision provider + pending screenshot
+        # futures. Screen images are only captured on explicit user actions
+        # (toolbar eye button / a matching user phrase) and are sent
+        # straight to the configured vision endpoint; they never touch the
+        # disk or the chat history — only the description text rides the
+        # current turn's system prompt.
+        self.vision = VisionProvider(self.config.get('vision', {}))
+        self._pending_shots = {}   # _id -> Future resolving to base64 jpeg
+        self._shot_seq = 0
+
+    # ---------------- multi-character (Phase 39) ----------------
+
+    def _build_role(self, cid):
+        """Construct (meta, ConversationManager, ReminderStore) for the
+        character: merged config (persona prompt + voice), isolated
+        persistence paths, brief callbacks re-attached."""
+        merged, meta = self.characters.build_config(cid, self.config)
+        prompt = load_prompt(merged)
+        hist, mem, rem = self.characters.persistence_paths(cid)
+        conv = ConversationManager(merged, self.llm, prompt,
+                                   history_path=hist, memory_path=mem)
+        conv.system_prompt = prompt
+        conv.reminder_brief = self._reminder_prompt_brief
+        # single character => no roster noise in the prompt
+        conv.character_brief = (lambda: self.characters.brief(self.current_character_id)
+                                if len(self.characters.characters) > 1 else None)
+        reminders = ReminderStore(path=rem)
+        return meta, conv, reminders
+
+    def apply_character(self, cid):
+        """Switch the live persona: rebuilds conv/reminders from the
+        character's config+paths, swaps the TTS voice, remembers the
+        selection on disk and returns the meta payload for the broadcast."""
+        if not self.characters.exists(cid):
+            raise ValueError('未知的角色: %s' % cid)
+        self.current_character_id = cid
+        meta, conv, reminders = self._build_role(cid)
+        self.character_meta = meta
+        self.conv = conv
+        self.system_prompt = conv.system_prompt
+        self.reminders = reminders
+        # voice override rides the merged tts config
+        merged, _ = self.characters.build_config(cid, self.config)
+        self.tts.config = merged
+        self.tts.reload()
+        remember_character(cid)
+        logger.info('character switched -> %s (%s) history=%s reminders=%s',
+                    meta['name'], cid, conv.history_path, reminders.path)
+        return meta
+
+    async def _switch_character(self, ws, msg):
+        mid = msg.get('_id')
+        cid = str(msg.get('id') or msg.get('character') or '').strip()
+        try:
+            meta = self.apply_character(cid)
+        except Exception as e:
+            await self.send(ws, {'type': 'error', 'code': 'character',
+                                 'message': str(e), '_id': mid})
+            return
+        payload = {'type': 'character_switched', 'character': meta, '_id': mid}
+        await self.broadcast(payload)
+
+    async def broadcast(self, obj):
+        """Push a message to every connected client (broadcast events like
+        character_switched / reminder_added must reach all renderers)."""
+        data = json.dumps(obj, ensure_ascii=False)
+        dead = []
+        for ws in list(self.clients):
+            try:
+                await ws.send(data)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.clients.discard(ws)
+
+    # Screen-cue regex (Phase 38): the user phrase fast-path that triggers
+    # the capture-and-describe flow WITHOUT needing an LLM intent round-trip.
+    # Kept deliberately tight: a bare "屏幕/桌面" must NOT trigger (people
+    # chat about wallpapers and desktops without wanting her to look); a
+    # look-verb + screen-noun pair, or a visible-error question, does.
+    SCREEN_CUE_RE = re.compile(
+        r'看(一?下|看)[^，。？！,.\n]{0,10}(屏幕|桌面|电脑)'
+        r'|瞅[^，。？！,.\n]{0,10}(屏幕|桌面)'
+        r'|(屏幕|桌面)上?[^，。？！,.\n]{0,6}(这是|这个|是什么|有什么|怎么了|怎么回事|出了?什么|显示了?什么|出现)'
+        r'|(报错|报了个错|错误信息?|报错了|弹窗|蓝屏)[^，。？！,.\n]{0,12}(是什么|什么意思|为什么|怎么回事|咋回事|怎么办|怎么解决|求助|(你|我)(快?|来?|帮我?)?(看|瞧))'
+        r'|你(快?|来?)?看(一?下|看)?[^，。？！,.\n]{0,10}(屏幕|桌面|报错|错误|这个|弹窗)'
+    )
+
+    @classmethod
+    def wants_screen_look(cls, text):
+        return bool(text) and bool(cls.SCREEN_CUE_RE.search(str(text)))
 
     # ---------------- lifecycle ----------------
 
@@ -100,7 +209,17 @@ class BackendServer:
         self.tts.reload()
         self.conv.reload(self.config, self.system_prompt)
         self.stt.reload_config(self.config)
-        logger.info('config reloaded: llm=%s tts=%s', self.llm.provider_name, self.tts.provider_name)
+        self.vision.reload(self.config.get('vision', {}))
+        # multi-character (Phase 39): rescan profiles and re-apply the LIVE
+        # persona on top of the freshly loaded config (a persona_name save
+        # from the settings panel must survive a character switch)
+        self.characters = CharacterStore(self.config)
+        if not self.characters.exists(self.current_character_id):
+            self.current_character_id = PRIMARY_ID
+        meta = self.apply_character(self.current_character_id)
+        logger.info('config reloaded: llm=%s tts=%s vision_ready=%s character=%s',
+                    self.llm.provider_name, self.tts.provider_name, self.vision.ready,
+                    meta['name'])
 
     # ---------------- helpers ----------------
 
@@ -118,6 +237,9 @@ class BackendServer:
             'stt_error': self.stt.error,
             'llm_provider': self.llm.provider_name,
             'tts_provider': self.tts.provider_name,
+            'character': {'id': self.current_character_id,
+                          'name': (self.character_meta or {}).get('name', '')},
+            'characters': self.characters.summary(),
         }
 
     # ---------------- message handling ----------------
@@ -195,8 +317,19 @@ class BackendServer:
         elif mtype == 'clear_memory':
             self.conv.memory.clear()
             await self.send(ws, {'type': 'memory_cleared', '_id': mid})
+        elif mtype == 'get_characters':
+            await self.send(ws, {'type': 'characters', 'items': self.characters.summary(),
+                                 'current': self.current_character_id, '_id': mid})
+        elif mtype == 'switch_character':
+            await self._switch_character(ws, msg)
         elif mtype == 'user_message':
-            await self.handle_chat(ws, msg.get('text', ''), mid)
+            await self.handle_chat(ws, msg.get('text', ''), mid, screen=msg.get('screen'))
+        elif mtype == 'screenshot':
+            # renderer's answer to our request_screenshot push (Phase 38):
+            # resolve the pending future with the captured jpeg (or None)
+            fut = self._pending_shots.pop(mid, None)
+            if fut is not None and not fut.done():
+                fut.set_result(msg.get('data') or None)
         elif mtype == 'transcribe_partial':
             await self.handle_partial(ws, msg.get('data', ''), msg.get('format', 'webm'), mid)
         elif mtype == 'transcribe_audio':
@@ -206,15 +339,79 @@ class BackendServer:
         else:
             logger.warning('unknown message type: %s', mtype)
 
-    async def handle_chat(self, ws, text, mid):
-        if not text.strip():
+    async def handle_chat(self, ws, text, mid, screen=None, source='text'):
+        """Entry point for a user chat turn. Two screen-awareness paths
+        (Phase 38): the renderer may attach a fresh screenshot to the
+        message (`screen`, from the toolbar eye button), or the user's own
+        words match the screen cue regex — in both cases the turn goes
+        through _screen_turn (capture/describe) before the normal pipeline."""
+        if not text.strip() and not screen:
             return
+        if screen:
+            if not self.vision.ready:
+                await self.send(ws, {'type': 'error', 'code': 'vision',
+                                     'message': self.vision.guidance(), '_id': mid})
+                return
+            # fire-and-forget: the screen turn WAITS for a reply on this
+            # very connection (the screenshot answer), which the dispatch
+            # loop itself must deliver — awaiting inside dispatch would
+            # deadlock the reader until the 15s capture timeout.
+            asyncio.ensure_future(self._screen_turn(
+                ws, text.strip() or '帮我看看我屏幕上现在是什么。', mid,
+                screen_b64=screen, source=source))
+            return
+        if self.wants_screen_look(text):
+            if not self.vision.ready:
+                await self.send(ws, {'type': 'error', 'code': 'vision',
+                                     'message': self.vision.guidance(), '_id': mid})
+                return
+            asyncio.ensure_future(self._screen_turn(ws, text, mid, need_capture=True, source=source))
+            return
+        await self._run_chat_pipeline(ws, text, mid, source=source)
+
+    async def _screen_turn(self, ws, text, mid, screen_b64=None, need_capture=False, source='text'):
+        """Screen-aware turn (Phase 38): make her look at the screen —
+        capture via the renderer (or use the attached screenshot), describe
+        it through the vision model, then run the normal streaming chat
+        pipeline with the description riding this turn's system prompt.
+        The screenshot itself is never persisted; history keeps the user's
+        words verbatim."""
+        await self.send(ws, {'type': 'screen_looking', '_id': mid})
+        if need_capture:
+            self._shot_seq += 1
+            shot_id = 'shot-%d' % self._shot_seq
+            fut = asyncio.get_event_loop().create_future()
+            self._pending_shots[shot_id] = fut
+            try:
+                await self.send(ws, {'type': 'request_screenshot', '_id': shot_id})
+                screen_b64 = await asyncio.wait_for(fut, timeout=15.0)
+            except asyncio.TimeoutError:
+                logger.warning('screenshot request timed out')
+            finally:
+                self._pending_shots.pop(shot_id, None)
+            if not screen_b64:
+                await self.send(ws, {'type': 'error', 'code': 'vision',
+                                     'message': '没能拿到屏幕截图，再试一次好不好？', '_id': mid})
+                return
+        try:
+            desc = await self.vision.describe(screen_b64)
+        except Exception as e:
+            logger.error('vision describe failed: %s', e)
+            await self.send(ws, {'type': 'error', 'code': 'vision',
+                                 'message': '看屏幕失败了：' + str(e), '_id': mid})
+            return
+        await self._run_chat_pipeline(ws, text, mid, extra_context=desc, source=source)
+
+    async def _run_chat_pipeline(self, ws, text, mid, source='text', extra_context=None):
+        """The standard streaming chat turn shared by every entry path:
+        early-TTS worker + chat_stream + reminder side-channels + reply."""
         tracker = ReplySentenceTracker()
         queue = asyncio.Queue()
         worker = asyncio.ensure_future(self._tts_worker(ws, queue))
         try:
             on_delta = self._stream_sink(ws, tracker, queue)
-            result = await self.conv.chat_stream(text, source='text', on_delta=on_delta)
+            result = await self.conv.chat_stream(text, source=source, on_delta=on_delta,
+                                                 extra_context=extra_context)
         except Exception as e:
             logger.error('LLM error: %s', e)
             queue.put_nowait(None)
@@ -259,26 +456,10 @@ class BackendServer:
             return
         await self.send(ws, {'type': 'stt_result', 'text': text, '_id': mid})
         if text.strip():
-            tracker = ReplySentenceTracker()
-            queue = asyncio.Queue()
-            worker = asyncio.ensure_future(self._tts_worker(ws, queue))
-            try:
-                on_delta = self._stream_sink(ws, tracker, queue)
-                result = await self.conv.chat_stream(text, source='voice', on_delta=on_delta)
-            except Exception as e:
-                logger.error('LLM error: %s', e)
-                queue.put_nowait(None)
-                await worker
-                await self.send(ws, {'type': 'error', 'code': 'llm', 'message': str(e), '_id': mid})
-                return
-            await self._apply_chat_reminder(ws, result)
-            await self._apply_chat_reminder_remove(ws, result)
-            resp = dict(result)
-            resp['type'] = 'ai_response'
-            resp['_id'] = mid
-            await self.send(ws, resp)
-            await self._flush_tts(queue, tracker, result)
-            await worker
+            # shared pipeline (Phase 38): voice utterances ride the same
+            # chat path as text, so saying "看看我桌面这个报错" also
+            # triggers the screen flow
+            await self.handle_chat(ws, text, mid, source='voice')
         else:
             # nothing said — gentle ignore
             pass

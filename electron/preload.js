@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('desktop', {
   applyWindowPos: (x, y) => ipcRenderer.send('window:applyPos', x, y),
   getWindowInfo: () => ipcRenderer.invoke('window:info'),
   showWindow: () => ipcRenderer.send('window:show'),
+  // screen awareness (Phase 38): primary-display capture as base64 JPEG
+  captureScreen: () => ipcRenderer.invoke('screen:capture'),
   // lifecycle
   setHeartMode: (showHeart) => ipcRenderer.invoke('app:setHeartMode', showHeart),
   setLaunchAtStartup: (enabled) => ipcRenderer.invoke('app:setLaunchAtStartup', enabled),
