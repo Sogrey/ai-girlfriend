@@ -20,6 +20,12 @@ html,body {
 #scene { position:fixed; inset:0; width:100%; height:100%; display:block; }
 
 .hidden { opacity:0 !important; pointer-events:none !important; }
+/* character-panel mode switching: the global .hidden above is an
+   opacity fade (panels keep their layout during show/hide animation), but
+   inside the manager the list/memory/form blocks are exclusive MODES —
+   an invisible-but- occupying block leaves a dead half-panel of empty
+   space above the form (user report-7, 10-17). Display:none for these. */
+#character-panel .hidden { display:none !important; }
 
 /* ---------- Toast ---------- */
 #toast-container { position:fixed; top:20px; right:30px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; align-items:flex-end; }
@@ -275,6 +281,16 @@ fieldset input[type=range] { width:100%; margin-top:6px; }
 .kbd { display:inline-block; padding:2px 8px; border-radius:5px; background:rgba(255,255,255,.1); font-size:12px; font-family:monospace; }
 .settings-actions { display:flex; gap:8px; justify-content:flex-end; padding-top:8px; }
 .settings-actions button { white-space:nowrap; flex:0 0 auto; }
+/* secondary buttons inside action rows (取消/返回…): bare <button> would
+   fall back to the browser default look — white pill on a dark panel
+   (user report-7, 10-17). Give them the standard ghost style. */
+.settings-actions button:not(.btn-primary):not(.danger) {
+  padding:8px 16px; border:1px solid rgba(255,255,255,.22); border-radius:8px;
+  cursor:pointer; background:transparent; color:#fff; font-size:13px;
+}
+.settings-actions button:not(.btn-primary):not(.danger):hover {
+  background:rgba(255,255,255,.08); border-color:rgba(255,120,170,.4);
+}
 .btn-primary { padding:8px 20px; border:none; border-radius:8px; cursor:pointer; background:rgba(255,120,170,.6); color:#fff; font-size:14px; }
 .btn-primary:hover { background:rgba(255,120,170,.8); }
 #set-cancel { padding:8px 20px; border:1px solid rgba(255,255,255,.2); border-radius:8px; cursor:pointer; background:transparent; color:#fff; font-size:14px; }
