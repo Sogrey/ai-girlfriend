@@ -27,50 +27,54 @@
 
 | 依赖 | 版本要求 | 检查命令 |
 |---|---|---|
-| Node.js | ≥ 18 | `node --version` |
+| Rust 工具链 | ≥ 1.80（stable） | `cargo --version` |
 | Python | ≥ 3.10 | `python --version` |
+| Node.js | ≥ 18（仅 three.js 等 npm 依赖） | `node --version` |
 | NVIDIA GPU | CUDA 兼容（推荐 RTX 3060+） | `nvidia-smi` |
 
 > **没有 GPU 也能跑**——Whisper 会自动回退到 CPU int8 模式，只是识别速度慢一些。
+
+> **壳层说明（v2.0）**：自 Phase 46（2026-10-17）起 main 分支使用 **Tauri 2** 壳（src-tauri/，内存/体积更轻）；原 Electron 壳完整封存在 `electron` 分支，可随时切回。
 
 ### 首次安装（只需做一次）
 
 ```powershell
 cd ai-girlfriend
 
-# 1. 安装 Node 依赖
+# 1. 安装 Node 依赖（three.js 运行时资源）
 npm install
 
 # 2. 创建 Python 虚拟环境并安装后端依赖
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
 .venv\Scripts\python.exe -m pip install -r backend\requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 3. 安装 Rust 工具链（尚未安装时）
+#    https://rustup.rs （首次编译 Tauri 壳约 5 分钟）
 ```
 
-国内网络已配好镜像（`.npmrc` → npmmirror，pip → 清华源，Whisper 模型 → hf-mirror.com），正常网络环境下全程自动完成。
+国内网络已配好镜像（pip → 清华源，Whisper 模型 → hf-mirror.com），正常网络环境下全程自动完成。
 
 ### 日常启动
 
 **双击 `scripts\启动AI女友.bat` 即可。**
 
-BAT 脚本会自动完成：
-1. 检查 `.venv` 和 `node_modules` 是否就绪
-2. 后台启动 Python Backend（WebSocket 127.0.0.1:8765）
-3. 等待后端端口就绪（最多 40 秒）
-4. 启动 Electron 显示 3D 角色
-5. 退出时自动清理后端进程
+BAT 会检查 `.venv` 与 Rust 工具链后运行 Tauri 壳；Tauri 壳启动时自动接管 Python 后端：8765 端口已有监听则直接复用（可与其也实例并存），否则自动拉起 `backend\main.py`（日志在 `.temp\tauri-backend.log`），退出时自动树杀自己拉起的后端。
 
 **手动分步启动**（调试用）：
 
 ```powershell
-# 终端 1：启动后端
 cd ai-girlfriend
-.venv\Scripts\python.exe backend\main.py
 
-# 终端 2：启动前端
-cd ai-girlfriend
-npx electron .
+# 方式一：一键（cargo run = Tauri 壳 + 自动后端）
+cargo run --manifest-path src-tauri/Cargo.toml
+
+# 方式二：分步（后端单独窗口看日志）
+.venv\Scripts\python.exe backend\main.py    # 终端 1
+cargo run --manifest-path src-tauri/Cargo.toml   # 终端 2（会复用 8765）
 ```
+
+**调试技巧**：WebView2 开 CDP 口——设置环境变量 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223` 后再启动，即可用 Chrome DevTools / node WS 探针连接 9223；壳自身日志直接打印在终端（含后端转发日志）。
 
 ---
 
@@ -404,15 +408,24 @@ Private / Personal Use
 > AI生成
 ---
 
-## 打包（portable 目录版）
+## 打包（NSIS 安装包）
 
-```bash
-npm install          # 安装依赖（含 electron-builder）
-npm run dist         # 打包 → dist/win-unpacked/AI-Girlfriend.exe
+```powershell
+cargo tauri build          # 产物在 src-tauri/target/release/bundle/nsis/
+# 或（装了 @tauri-apps/cli 时）
+npm run tauri -- build
 ```
 
-- 产物为免安装目录版：`dist\win-unpacked\` 整个文件夹拷走即可（双击 `AI-Girlfriend.exe`，桌宠窗口 + 托盘 + 快捷键与开发版一致）。
-- 语音/对话后端仍走本机 Python 环境（首次安装.bat 所装的 `.venv` + GPT-SoVITS），打包产物为"同机安装版"形态；用户密钥 `config/user.json` 与聊天记录不会打进包。
-- `three/examples`（GLTFLoader 等）经 `extraResources` 进入包内——electron-builder 默认会砍 `node_modules` 里的 examples 目录，勿删该配置。
+- 产物为 NSIS 安装包；`--no-bundle` 只编译单 exe（`src-tauri\target\release\ai-girlfriend.exe`）。
+- Rust 壳体积极小（数 MB），页面资源与 three.js 由 `app://` 协议在运行时从**安装目录**读取——安装包需随附仓库的 renderer/heart/assets/prompts/node_modules/config（bundle 配置见 `src-tauri/tauri.conf.json`，同机安装版形态）。
+- 语音/对话后端仍走本机 Python（`.venv` + GPT-SoVITS），用户密钥 `config/user.json` 与聊天记录绝不进包。
+- 原 electron-builder 打包方案封存在 `electron` 分支。
+
+## 分支说明
+
+| 分支 | 壳层 | 说明 |
+|---|---|---|
+| `main` | **Tauri 2**（src-tauri/） | 未来主线：更轻的壳、更小的内存/体积 |
+| `electron` | Electron 34（electron/） | Phase 1–45 形态完整封存，含 electron-builder 打包配置，可随时切回 |
 
 > AI生成
