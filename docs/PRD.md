@@ -242,6 +242,25 @@
 | FR-1307 | 时间感知：每轮 system prompt 注入当前时间（日期+星期+秒级），可答"现在几点了"、理解"明天/今晚/X分钟后"等相对时间 | ✅ | 近 E2E/CDP 报时实测；时间注入为 FR-1306 换算与日常闲聊时间话题的地基 |
 | FR-1308 | 自然语言管理提醒：每轮注入当前提醒清单（含 id），"我设了哪些提醒"照实口述；"把喝水的删了/全部删掉"→ LLM 意图（reminder_remove 键：id 精确/关键词模糊/all 清空，{"all":true} 形态兼容；id 未命中自动回退关键词）→ 自动执行 + 🗑️ 已删除提醒气泡 + 面板联动；多匹配追问、未命中如实说明；承诺式语气防谎报（"这就帮你删"而非"已删"）；空回复重试轮 JSON 保真（意图不因纯文本重试丢失） | ✅ | 10-15 Phase 34：单测 56/56+回归 56/56；近 E2E 16/16；真 LLM 删除稳定度 3/3；CDP 12/12（列表/单删/面板同步/全部清空） |
 
+### 3.14 屏幕感知（2026-10-17 Phase 38，v2.0 P2）
+
+| 编号 | 需求 | 状态 | 验证 |
+|---|---|---|---|
+| FR-1401 | 视觉 Provider（OpenAI 兼容 chat/completions + image_url 多模态消息）：默认智谱 GLM-4V-Flash（免费，open.bigmodel.cn）可配任意兼容中转/模型；ready 门面（无 Key 不启用，调用返回中文引导而非裸错）；多形态 content 解包（字符串/分段列表）、非 200/少字段/空描述分别转可读错误 | ✅ | 10-17 Phase 38：单测 13 项（MockTransport 请求形状/键认证/错误映射/解包） |
+| FR-1402 | 截屏链路：Electron main desktopCapturer 主屏 1120px JPEG（质量 85 整数——浮点会抛原生转换错误）；renderer 👁 按钮即时截屏（screen-chip 提示、可取消、随下一句消费）；用户话语 cue 正则触发（看/瞅+屏幕/桌面、报错/弹窗/蓝屏等疑问）后端 request_screenshot 下发/渲染端 screenshot 应答（15s 超时）；语音路径同样共享该管线 | ✅ | CDP 20/20（真实截图 185KB/消息携带 screen/cue 路径/取消）；toJPEG(0.85) 缺陷由独立探针定位修复 |
+| FR-1403 | 两跳编排：视觉描述仅注入该轮 system prompt（## 当前屏幕画面块），历史文件只存用户原话，截图不落盘（隐私默认）；视觉回合后台化（ensure_future 防与截图应答同连接死锁，15s 超时下限验证） | ✅ | 单测 9 项注入/隔离断言；E2E A/B/D 组（假视觉服务器全链，历史无描述文本） |
+| FR-1404 | 未配置体验：cue 命中先查 ready，未配置不截屏直接返回带设置路径的引导气泡（含 GLM-4V-Flash 免费提示），普通对话零探测零延迟 | ✅ | E2E C 组 + 部署回归（未配置不截屏直接引导）；普通对话 0 调用 |
+
+### 3.15 多角色系统（2026-10-17 Phase 39，v2.0 P2）
+
+| 编号 | 需求 | 状态 | 验证 |
+|---|---|---|---|
+| FR-1501 | 角色档案：config/characters/<id>.json（name/desc/model/tint/system_prompt/voice 覆盖）；主角色 xiaoman 常驻（从全局配置合成，零迁移兼容现有数据）；name 缺失档案跳过；角色列表接口 get_characters/summary（主角色居首） | ✅ | 10-17 Phase 39：单测 15 项（扫描/合成/顺序/坏档案容错） |
+| FR-1502 | 持久化隔离：主角色映射历史文件（history.jsonl/memory.json/reminders.json）、自定义角色同目录 history-<id>.jsonl 等；路径从模块常量派生（隔离启动器重定向对全部角色自动生效）；LLM Provider 全角色共享（一个 Key 服务全部） | ✅ | 单测 7 项路径矩阵；E2E B/C 组（小雪空存储/主角色提醒+历史切换无损） |
+| FR-1503 | 切换编排：build_config（角色 persona/人设 prompt/TTS 参考音色 deep-merge 到全局配置，空字段不覆盖）→ conv/reminders 重建 + tts 热切；选择持久化 user.json app.character_id（启动恢复）；character_switched 全客户端广播 | ✅ | 单测 12 项合并规则；E2E 双向切换；CDP F/G（真实 UI 切换/回切/聊天清空/选择记忆） |
+| FR-1504 | 自然语言召唤：多角色时每轮注入角色清单 brief，"叫小雪来"→ LLM 意图（action=switch_character + character 字段 id）；validate 严格门控（非 switch 动作的 character 字段强制丢弃防劫持）；渲染层 dispatcher 转发 switch_character 到后端 | ✅ | 单测 6 项意图门控；E2E D 组（真 DeepSeek 首发命中 + renderer 模拟执行）；CDP 意图链路 |
+| FR-1505 | 角色条 UI：工具栏 👥 按钮开关（与换装条互斥），动态拉取角色列表，当前角色高亮，点击后模型换载（档案配了 model 时；失败保留当前模型）+ 聊天清空 + 该角色历史回放 + toast + 回归动画 | ✅ | CDP F/G 全链路；无 model 档案（UI-only，如验收用小雪）零 VRM 依赖 |
+
 ---
 
 ## 4. 非功能需求（NFR）
@@ -291,24 +310,29 @@
 
 | 方向 | 消息 | 载荷 |
 |---|---|---|
-| R→B | `user_message` | `{text}` 文字对话 |
+| R→B | `user_message` | `{text, screen?}` 文字对话；screen=👁 附上的 base64 JPEG，该轮走视觉两跳编排（Phase 38） |
+| R→B | `screenshot` | `{_id, data}` 对 request_screenshot 的应答（cue 路径，Phase 38） |
+| R→B | `get_characters` / `switch_character` | 角色列表 / `{id}` 切换多角色（Phase 39） |
 | R→B | `transcribe_audio` | `{data: base64 webm/opus}` 语音识别 |
 | R→B | `speak_line` | `{text, emotion}` 本地台词直读（摸头反应） |
 | R→B | `reload_config` / `ping` / `get_status` / `clear_history` / `get_history` | 控制（get_history：拉取持久化历史供重启回填） |
 | B→R | `stt_result` | `{text}` 识别结果 |
-| B→R | `ai_response` | `{reply, emotion, action, costume}` 结构化意图 |
+| B→R | `ai_response` | `{reply, emotion, action, costume, character}` 结构化意图（character 仅 switch_character 时非空） |
 | B→R | `llm_partial` | 流式增量帧（SSE delta，打字机效果） |
-| B→R | `tts_audio` | `{seq, final, data: base64 mp3}` 逐句音频 |
+| B→R | `tts_audio` | `{seq, final, data: base64 mp3/wav}` 逐句音频（流式 provider 多帧/帧） |
+| B→R | `request_screenshot` | `{_id}` 请渲染器截屏（屏幕感知 cue 路径，Phase 38） |
+| B→R | `screen_looking` | 她正在看屏幕（toast 反馈，Phase 38） |
+| B→R | `character_switched` | `{character: {id,name,desc,model}}` 切换广播（全客户端，Phase 39） |
 | B→R | `history_replay` | `{items}` 重启后历史回填 |
-| B→R | `tts_audio` | `{seq, final, data: base64 mp3}` 逐句音频 |
-| B→R | `status` / `error` | 状态与错误 |
+| B→R | `status` / `error` | 状态（含 character/characters）与错误 |
 
 ### 5.3 Action 协议（LLM → 渲染）
 
 ```json
 {"reply": "...", "emotion": "happy|shy|angry|sad|surprised|caring|neutral",
- "action": "idle|wave|leave|return|change_costume|comfort|head_pat|jump|dance|think",
- "costume": "casual|school|stylish|gothic|seed|null"}
+ "action": "idle|wave|leave|return|change_costume|comfort|head_pat|jump|dance|think|nod|shake_head|blow_kiss|stretch|greet|spin|switch_character",
+ "costume": "casual|school|stylish|gothic|seed|null",
+ "character": "角色id（仅 switch_character 时非空，Phase 39）"}
 ```
 
 校验层（`backend/actions/definitions.py`）：非法值归一、动作别名映射（如 `pat→head_pat`）、change_costume 缺失时从回复文本猜服装关键词。
