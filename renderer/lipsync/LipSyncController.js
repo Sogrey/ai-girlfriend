@@ -1,4 +1,4 @@
-// Real-time lip sync: analyses TTS audio via Web Audio FFT and maps
+﻿// Real-time lip sync: analyses TTS audio via Web Audio FFT and maps
 // frequency-band energy onto VRM mouth blendshapes (aa/ih/ou/ee/oh).
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -24,6 +24,8 @@ export class LipSyncController {
     this._queue = [];
     this._playing = false;
     this._current = null;
+    this._sources = [];   // gapless: scheduled-but-playing buffer sources
+    this._nextAt = 0;     // absolute AudioContext time the next frame starts at
     this._runningMax = {};
     this._smooth = { aa: 0, ih: 0, ou: 0, ee: 0, oh: 0 };
     this._onPlaybackEnd = null;
@@ -52,50 +54,97 @@ export class LipSyncController {
 
   get speaking() { return this._playing || this._queue.length > 0; }
 
-  // Queue one TTS audio chunk (base64 mp3). Chunks play in order.
+    // Queue one TTS audio chunk (base64 wav). Chunks play gapless, in order.
+    // (report-6, 10-17) Each frame is decoded THE MOMENT it arrives and
+    // scheduled at the exact end-time of the previous frame (start(when)),
+    // instead of the old onended→decode→start chain whose decode latency
+    // punched an audible gap between every pair of frames.
   speak(base64, { seq = 0, final = true, onStart, onEnd } = {}) {
     this._ensureCtx();
     if (this.ac.state === 'suspended') this.ac.resume().catch(() => {});
     const bin = atob(base64);
+    // empty data frames are pure sequence-closers (final=true, no audio):
+    // decodeAudioData would throw EncodingError on the empty buffer (they
+    // arrive when a synthesis stream ends without a tail buffer)
+    if (bin.length < 45) {
+      const item = { empty: true, seq, final, onStart, onEnd };
+      const wasIdle = this._queue.length === 0 && !this._playing;
+      this._queue.push(item);
+      if (wasIdle) this._nextAt = 0;
+      this._pump();
+      return;
+    }
     const buf = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    this._queue.push({ data: buf.buffer, seq, final, onStart, onEnd });
-    if (!this._playing) this._pump();
+    const item = { decoded: this.ac.decodeAudioData(buf.buffer), seq, final, onStart, onEnd };
+    const wasIdle = this._queue.length === 0 && !this._playing;
+    this._queue.push(item);
+    if (wasIdle) this._nextAt = 0;   // fresh utterance: schedule from now
+    this._pump();
   }
 
   stopAll() {
     this._queue = [];
+    for (const src of this._sources) {
+      try { src.onended = null; src.stop(); } catch {}
+    }
+    this._sources = [];
+    this._playing = false;
+    this._nextAt = 0;
     if (this._current) {
       try { this._current.stop(); } catch {}
     }
-    this._playing = false;
   }
 
-  async _pump() {
-    if (this._playing) return;
-    const item = this._queue.shift();
-    if (!item) return;
-    this._playing = true;
-    this._hasSpokenSinceStart = true;
-    try {
-      const audioBuf = await this.ac.decodeAudioData(item.data);
+    async _pump() {
+      // schedule every decoded-ready frame as far ahead as possible; the
+      // loop pulls from _queue as more frames arrive (streaming)
+      while (this._queue.length > 0) {
+        const item = this._queue.shift();
+        if (item.empty) {
+          // closer frame: no audio, just state bookkeeping
+          if (this._sources.length === 0 && this._queue.length === 0) {
+            this._playing = false;
+            this._nextAt = 0;
+            if (item.final) this._onPlaybackEnd?.();
+          }
+          item.onEnd?.();
+          continue;
+        }
+        let audioBuf;
+      try {
+        audioBuf = await item.decoded;
+      } catch (e) {
+        console.error('lip sync decode error', e);
+        // empty data frames / corrupt frames: drop silently; still close
+        // the utterance state when nothing else is scheduled (report-6)
+        if (this._sources.length === 0 && this._queue.length === 0) {
+          this._playing = false;
+          this._nextAt = 0;
+          if (item.final) this._onPlaybackEnd?.();
+        }
+        continue;
+      }
       const src = this.ac.createBufferSource();
       src.buffer = audioBuf;
       src.connect(this.analyser);
-      this._current = src;
+      const when = Math.max(this._nextAt || 0, this.ac.currentTime);
+      this._nextAt = when + audioBuf.duration;
+      this._sources.push(src);
+      this._playing = true;
+      this._hasSpokenSinceStart = true;
       item.onStart?.();
       src.onended = () => {
-        this._playing = false;
-        this._current = null;
+        const i = this._sources.indexOf(src);
+        if (i >= 0) this._sources.splice(i, 1);
         item.onEnd?.();
-        if (item.final && this._queue.length === 0) this._onPlaybackEnd?.();
-        this._pump();
+        if (this._sources.length === 0 && this._queue.length === 0) {
+          this._playing = false;
+          this._nextAt = 0;
+          if (item.final) this._onPlaybackEnd?.();
+        }
       };
-      src.start();
-    } catch (e) {
-      console.error('lip sync decode/play error', e);
-      this._playing = false;
-      this._pump();
+      src.start(when);
     }
   }
 

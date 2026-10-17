@@ -655,7 +655,11 @@ class BackendServer:
     # ---------------- streaming TTS: wav re-framing (Phase 37) ----------------
 
     WAV_HEADER_LEN = 44          # api_v2 emits a standard minimal wav header
-    STREAM_FRAME_MIN = 192000    # ~3s of 32k/16bit/mono PCM per mid-stream frame
+    # ~1.5s of 32k/16bit/mono PCM per mid-stream frame. Was 192000 (3s) —
+    # frames coarser than the api_v2 generation rate made the renderer sit
+    # idle mid-sentence for seconds (report-6 listening session); 1.5s
+    # halves the worst wait while keeping per-frame overheads trivial.
+    STREAM_FRAME_MIN = 48000
 
     async def _speak_reply_streamed(self, ws, sentences, emotion):
         """Streaming speak_reply: per-sentence stream -> re-framed wav
@@ -720,12 +724,24 @@ class BackendServer:
         moment the first chunk lands (then on_first fires — the prefetch
         hook), further frames every STREAM_FRAME_MIN bytes, the tail frame
         carries `final`. Empty tail closes with the classic empty-final
-        frame. Returns (next_seq, sent_any)."""
+        frame. Returns (next_seq, sent_any).
+
+        16-BIT ALIGNMENT (report-6, 10-17): every frame's PCM must be an
+        EVEN number of bytes. The renderer decodes each frame as a
+        standalone wav; an odd-length frame (api_v2's first flush is a
+        rock-stable 65529 PCM bytes!) drops the frame's last half-sample
+        AND shifts every FOLLOWING frame's int16 stream by one byte —
+        misaligned high/low bytes = full-frame electrical crackle. Cuts
+        are floored to even; the leftover byte rides into the next frame
+        (tail frame drops it: never emit a half sample)."""
         fmt = format_name or self.tts.media_type
         header = None
         buf = b''
         first_sent = False
         sent_any = False
+
+        def aligned(n):
+            return n - (n % 2)
         while True:
             item = await q.get()
             if item is None:
@@ -738,20 +754,25 @@ class BackendServer:
                     continue
                 header, buf = buf[:self.WAV_HEADER_LEN], buf[self.WAV_HEADER_LEN:]
             if not first_sent:
-                if buf:
-                    await self._send_wav_frame(ws, header, buf, seq, final=False, fmt=fmt)
+                cut = aligned(len(buf))
+                if cut:
+                    await self._send_wav_frame(ws, header, buf[:cut], seq, final=False, fmt=fmt)
                     seq += 1
-                    buf = b''
+                    buf = buf[cut:]
                     first_sent = True
                     sent_any = True
                     if on_first:
                         on_first()
             elif len(buf) >= self.STREAM_FRAME_MIN:
-                await self._send_wav_frame(ws, header, buf, seq, final=False, fmt=fmt)
+                cut = aligned(len(buf))
+                await self._send_wav_frame(ws, header, buf[:cut], seq, final=False, fmt=fmt)
                 seq += 1
-                buf = b''
+                buf = buf[cut:]
                 sent_any = True
-        # tail frame closes this sentence's audio
+        # tail frame closes this sentence's audio (odd trailing byte is
+        # dropped — a half-sample would click even when self-decoded)
+        if len(buf) % 2:
+            buf = buf[:-1]
         if buf:
             await self._send_wav_frame(ws, header, buf, seq, final=final, fmt=fmt)
             seq += 1
