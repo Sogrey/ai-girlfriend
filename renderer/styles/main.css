@@ -26,9 +26,12 @@ html,body {
 .toast {
   padding:10px 18px; border-radius:10px; font-size:13px; line-height:1.4; max-width:420px; text-align:center;
   overflow-wrap:anywhere; word-break:break-word;
-  background:rgba(35,28,45,.97); border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 3px 12px rgba(0,0,0,.3); animation:toastIn .25s ease; pointer-events:auto;
+  background:rgba(35,28,45,.92); border:1px solid rgba(255,255,255,.12);
+  animation:toastIn .25s ease; pointer-events:auto;
 }
+/* (10-17 report-5 note) NO outer box-shadow on floating surfaces: on a light
+   wallpaper a black@.3 shadow reads as a lighter-than-panel grey rectangle
+   with a square raster cut — exactly the "light halo" the user reported. */
 .toast.error { background:rgba(120,30,40,.9); }
 .toast.ok { background:rgba(40,100,60,.9); }
 .toast.warn { background:rgba(120,90,30,.9); }
@@ -66,9 +69,9 @@ html,body {
   /* bar bottom = feet y + 4px gap */
   bottom: calc((100vh - var(--av-feet-y, 810px)) + 4px);
   display:flex; flex-direction:column; gap:6px; padding:6px; border-radius:18px;
-  /* solid bar (10-17 user report): the old .55 blur let background text
-     bleed through — visual noise. Opaque, no backdrop-filter. */
-  background:rgba(26,21,34,.96); border:1px solid rgba(255,255,255,.08);
+  /* (10-17 report-5) translucent .85 — user asked the solid .96 back off;
+     NO backdrop-filter, NO outer shadow (grey-halo source, see .panel note). */
+  background:rgba(26,21,34,.85); border:1px solid rgba(255,255,255,.08);
   transition:opacity .35s ease;
 }
 .toolbar button {
@@ -84,12 +87,15 @@ html,body {
   bottom: calc((100vh - var(--av-head-y, 320px)) + 92px);
   /* never overflow the window top: cap by the room above her head */
   width:360px; max-height:min(60vh, calc(var(--av-head-y, 320px) - 96px)); border-radius:16px; overflow:hidden;
-  /* solid panel (10-17 user report "半透明的背景阴影"): the old .88 +
-     blur(16px) + 40px shadow let whatever sits behind (other windows'
-     text, the wallpaper) bleed through as a muddy halo. Opaque base,
-     no backdrop-filter, minimal shadow. */
-  background:rgba(26,21,34,.97); border:1px solid rgba(255,255,255,.1);
-  box-shadow:0 3px 12px rgba(0,0,0,.3);
+  /* (10-17 report-5, pixel-verified at OS level) the reported "light
+     translucent square behind panels w/ clipped edges" = the old outward
+     box-shadow: black@.3 over a light wallpaper reads as a grey square-ish
+     rim larger than the panel, with its square raster bound as a hard cut.
+     Fix: translucent .85 base (user asked the solid .97 back off), NO
+     backdrop-filter, NO outward shadow — depth comes from an INSET highlight
+     which paints strictly inside the border-box. */
+  background:rgba(26,21,34,.85); border:1px solid rgba(255,255,255,.1);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), inset 0 -1px 0 rgba(0,0,0,.25);
   transition:opacity .25s ease, transform .25s ease;
 }
 .panel:not(.hidden) { animation:panelIn .25s ease; }
@@ -162,7 +168,7 @@ html,body {
 .chat-msg.ai, .chat-msg.user, .chat-msg.sys { user-select:text; -webkit-user-select:text; }
 .chat-msg.ai, .chat-msg.user { cursor:text; }
 /* right-click copy menu for chat bubbles */
-.chat-ctx-menu { position:fixed; z-index:1200; display:flex; flex-direction:column; min-width:128px; padding:4px; background:rgba(30,30,40,.97); border:1px solid rgba(255,255,255,.16); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.55); }
+.chat-ctx-menu { position:fixed; z-index:1200; display:flex; flex-direction:column; min-width:128px; padding:4px; background:rgba(30,30,40,.92); border:1px solid rgba(255,255,255,.16); border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.35); }
 .chat-ctx-menu button { padding:7px 12px; border:none; border-radius:7px; background:none; color:#eee; font-size:13px; text-align:left; cursor:pointer; white-space:nowrap; }
 .chat-ctx-menu button:hover { background:rgba(255,120,170,.25); color:#fff; }
 .settings-body .row-action { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -176,7 +182,8 @@ html,body {
   left: calc(var(--av-x, 1370px) - 140px);
   bottom: calc((100vh - var(--av-head-y, 320px)) + 92px);
   display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:20px;
-  background:rgba(26,21,34,.96); border:1px solid rgba(255,255,255,.1);
+  /* (10-17 report-5) .85 translucent, no outer shadow (grey-halo source). */
+  background:rgba(26,21,34,.85); border:1px solid rgba(255,255,255,.1);
   transition:opacity .25s;
 }
 .costume-bar .cb-title { font-size:12px; color:#aaa; padding:0 4px; }
@@ -192,7 +199,7 @@ html,body {
   left: calc(var(--av-x, 1370px) - 200px);
   bottom: calc((100vh - var(--av-head-y, 320px)) + 58px);
   display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:14px;
-  background:rgba(60,30,50,.96); border:1px solid rgba(255,120,170,.55);
+  background:rgba(60,30,50,.85); border:1px solid rgba(255,120,170,.55);
   color:#ffd7e8; font-size:12px; white-space:nowrap;
 }
 .screen-chip button { border:none; background:rgba(255,255,255,.12); color:#fff; border-radius:50%;
