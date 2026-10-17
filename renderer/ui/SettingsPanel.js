@@ -29,6 +29,13 @@ export function initSettingsPanel({ voice }) {
     bus.emit('toast:show', { text: '长期记忆已清除', kind: 'ok', ms: 2000 });
   });
 
+  // character-manager panel shortcut (Phase 40): close settings, open the
+  // manager — cross-module navigation rides the bus
+  document.getElementById('set-open-chars')?.addEventListener('click', () => {
+    toggle(false);
+    bus.emit('characters:manage');
+  });
+
   // persona (System Prompt) editor
   const promptEl = document.getElementById('set-prompt');
   const updateCount = () => {

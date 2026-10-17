@@ -67,6 +67,10 @@ export function initToolbar({ voice, chat, settings, dispatcher, costume }) {
       bus.emit('character:select', { id: cid });
       toggleBar(characterBarEl, false);
     }
+    if (e.target?.classList?.contains('cb-manage')) {
+      toggleBar(characterBarEl, false);
+      bus.emit('characters:manage');   // Phase 40: character-manager panel
+    }
     if (e.target?.classList?.contains('cb-close')) toggleBar(characterBarEl, false);
   });
 

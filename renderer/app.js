@@ -19,6 +19,7 @@ import { initToolbar } from './ui/Toolbar.js';
 import { initChatPanel, toggle as toggleChat, addAI as addAIBubble, addUser as addChatUser, clearLog as clearChatLog } from './ui/ChatPanel.js';
 import { initSettingsPanel, toggle as toggleSettings } from './ui/SettingsPanel.js';
 import { initReminderPanel } from './ui/ReminderPanel.js';
+import { initCharacterPanel } from './ui/CharacterPanel.js';
 
 import { loadVRM } from './avatar/VRMFactory.js';
 
@@ -60,6 +61,8 @@ async function boot() {
   const settings = { toggle: () => toggleSettings() };
   initSettingsPanel({ voice });
   initReminderPanel();
+  const charPanelToggle = initCharacterPanel({ backend });
+  window.__charPanelToggle = charPanelToggle;   // CDP/debug hook
 
   const dispatcher = new ActionDispatcher({
     animation, emotion, avatar, costume, particles, lipsync, chat, backend,
@@ -120,6 +123,13 @@ async function boot() {
       renderCharacterBar(m.items, m.current);
     } catch (e) { console.warn('[characters] list failed', e); }
   });
+
+  // roster changed from the manager panel (Phase 40): refresh the quick
+  // bar without touching the live persona
+  bus.on('characters:updated', ({ items, current }) => {
+    renderCharacterBar(items || [], current);
+  });
+  bus.on('characters:manage', () => charPanelToggle && charPanelToggle(true));
 
   bus.on('character:select', ({ id }) => {
     if (id === currentCharacterId) return;

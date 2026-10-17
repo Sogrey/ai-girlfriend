@@ -32,6 +32,8 @@ import copy
 import json
 import logging
 import os
+import re
+import uuid
 
 logger = logging.getLogger('characters')
 
@@ -61,6 +63,10 @@ class CharacterStore:
     # ---------- scanning ----------
 
     def _scan(self):
+        # FULL rebuild (Phase 40 fix): the dict is reset first so a rescan
+        # after a profile deletion drops the stale in-memory entry — the
+        # old add-only scan left deleted characters alive until reboot.
+        self.characters = {}
         if not os.path.isdir(self.dir):
             return
         for fn in os.listdir(self.dir):
@@ -117,6 +123,97 @@ class CharacterStore:
 
     def exists(self, cid):
         return cid in self.characters
+
+    # ---------- profile management (Phase 40: the character-manager UI) ----------
+
+    ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,32}$')
+
+    def save(self, cid, data):
+        """Create or update one character profile file (full replace: the
+        manager form's fields ARE the file). Returns (True, id) on success
+        or (False, error-message). The primary character is refused here —
+        its persona lives in the global config / settings panel.
+        Field sanitizing keeps files small and path-safe; empty optional
+        fields simply drop out of the profile (= inherit the global)."""
+        if (cid or '').strip() == PRIMARY_ID:
+            return False, '默认角色不用建档案：直接在设置面板修改她的名字和人设'
+        name = str((data or {}).get('name') or '').strip()
+        if not name:
+            return False, '角色名字不能为空'
+        cid = str(cid or '').strip()
+        if not cid:
+            for _ in range(8):
+                cand = 'c-' + uuid.uuid4().hex[:6]
+                if not os.path.exists(os.path.join(self.dir, cand + '.json')):
+                    cid = cand
+                    break
+            else:
+                return False, '自动生成档案 ID 失败，请手动填写'
+        if not self.ID_RE.match(cid):
+            return False, '档案 ID 只能包含字母、数字、-、_（1~32 位）'
+        profile = {'name': name[:24]}
+        desc = str(data.get('desc') or '').strip()
+        if desc:
+            profile['desc'] = desc[:60]
+        prompt = str(data.get('system_prompt') or '').strip()
+        if prompt:
+            profile['system_prompt'] = prompt[:12000]
+        model = str(data.get('model') or '').strip()
+        if model:
+            profile['model'] = model[:300]
+        tint = str(data.get('tint') or '').strip()
+        if tint:
+            profile['tint'] = tint[:20]
+        voice = data.get('voice') or {}
+        if isinstance(voice, dict):
+            gs = {}
+            for k in ('ref_audio', 'ref_text'):
+                v = str(voice.get(k) or '').strip()
+                if v:
+                    gs[k] = v[:1000]
+            if gs:
+                profile['voice'] = {'gptsovits': gs}
+        try:
+            os.makedirs(self.dir, exist_ok=True)
+            path = os.path.join(self.dir, cid + '.json')
+            tmp = path + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:   # NO BOM (project lesson)
+                json.dump(profile, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, path)
+        except Exception as e:
+            return False, '写档案失败：%s' % e
+        self._scan()
+        self._ensure_primary()
+        logger.info('character profile saved: %s (%s)', cid, profile['name'])
+        return True, cid
+
+    def can_delete(self, cid):
+        """Pre-check without touching disk; returns an error string or None."""
+        if (cid or '').strip() == PRIMARY_ID:
+            return '默认角色不能删除'
+        if not self.exists(cid):
+            return '未知的角色: %s' % cid
+        return None
+
+    def delete(self, cid):
+        """Remove one profile FILE. The character's own persistence files
+        (history-<id>.jsonl / memory-<id>.json / reminders-<id>.json) are
+        deliberately KEPT — recreating a same-id character restores its
+        memory, and a manual cleanup is a one-line delete if truly wanted.
+        Returns True on success."""
+        err = self.can_delete(cid)
+        if err:
+            logger.warning('character delete refused: %s', err)
+            return False
+        try:
+            os.remove(os.path.join(self.dir, cid.strip() + '.json'))
+        except Exception as e:
+            logger.warning('cannot delete character file: %s', e)
+            return False
+        self._scan()
+        self._ensure_primary()
+        logger.info('character profile deleted: %s (history files kept)', cid)
+        return True
 
     def brief(self, current_id):
         """Runtime block for the LLM: who is live + who the user may summon
@@ -198,6 +295,7 @@ def remember_character(cid):
                 cfg = json.load(f)
         app = cfg.setdefault('app', {})
         app['character_id'] = cid
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)

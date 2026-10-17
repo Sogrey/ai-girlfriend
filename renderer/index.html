@@ -106,10 +106,59 @@
 
   <!-- Character switcher bar (multi-character, Phase 39): populated at
        boot / on open from get_characters; clicking asks the backend to
-       switch personas (isolated history/memory/voice per character) -->
+       switch personas (isolated history/memory/voice per character).
+       The ⚙ manage button opens the character-manager panel (Phase 40) -->
   <div id="character-bar" class="costume-bar hidden">
     <span class="cb-title">角色</span>
+    <button class="cb-manage" title="管理角色（新建/编辑/删除）">管理</button>
     <button class="cb-close">×</button>
+  </div>
+
+  <!-- Character manager panel (Phase 40): list / create / edit / delete
+       profiles without hand-writing JSON -->
+  <div id="character-panel" class="panel hidden">
+    <div class="panel-header">角色管理 <button class="panel-close">×</button></div>
+    <div class="settings-body">
+      <div id="char-list-wrap">
+        <div id="char-list"></div>
+        <label class="row-action">
+          <button id="char-new" type="button">+ 新建角色</button>
+          <span class="hint">每个角色有独立的记忆、历史与提醒；档案存在 config/characters/</span>
+        </label>
+      </div>
+
+      <div id="char-form" class="hidden">
+        <div class="char-form-title" id="char-form-title">新建角色</div>
+        <label>显示名字（必填）
+          <input id="char-name" type="text" placeholder="如：小雪" autocomplete="off" />
+        </label>
+        <label>档案 ID（可选，仅新建）
+          <input id="char-id" type="text" placeholder="留空自动生成；仅字母数字或 - _" autocomplete="off" />
+        </label>
+        <label>一句话介绍
+          <input id="char-desc" type="text" placeholder="如：高冷学霸" autocomplete="off" />
+        </label>
+        <label class="char-prompt-head">
+          <span>人设（留空 = 沿用全局人设）</span>
+          <span id="char-prompt-count" class="hint">0 字</span>
+        </label>
+        <button id="char-prompt-default" type="button">载入默认人设改造</button>
+        <textarea id="char-prompt" rows="10" placeholder="描述她的性格、说话方式…（建议先载入默认人设再改，保留输出 JSON 格式约束）"></textarea>
+        <label>专属模型（可选）
+          <input id="char-model" type="text" placeholder="相对路径，如 assets/characters/xiaoxue.vrm（留空共用默认模型）" autocomplete="off" />
+        </label>
+        <label>专属音色 · 参考音频（GPT-SoVITS，可选）
+          <input id="char-voice-audio" type="text" placeholder="如 assets/voices/xue.wav（留空共用全局音色）" autocomplete="off" />
+        </label>
+        <label>专属音色 · 参考音频文字
+          <input id="char-voice-text" type="text" placeholder="参考音频里说的话，逐字一致（填了音频必须一致）" autocomplete="off" />
+        </label>
+        <div class="settings-actions">
+          <button id="char-save" type="button" class="btn-primary">保存角色</button>
+          <button id="char-cancel" type="button">取消</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Settings panel -->
@@ -142,6 +191,7 @@
         <legend>女友</legend>
         <label>角色名字 <input id="set-persona" type="text" /></label>
         <label>你的称呼 <input id="set-username" type="text" /></label>
+        <label class="row-action"><button id="set-open-chars" type="button">多角色管理…</button><span class="hint">新建其它角色档案（各自独立记忆），在工具栏 👥 切换</span></label>
       </fieldset>
 
       <fieldset>

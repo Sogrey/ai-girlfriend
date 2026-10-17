@@ -153,6 +153,50 @@ class BackendServer:
         payload = {'type': 'character_switched', 'character': meta, '_id': mid}
         await self.broadcast(payload)
 
+    async def _save_character(self, ws, msg):
+        """Create/update a character profile from the manager UI (Phase 40).
+        Saving the profile of the LIVE character re-applies it in place:
+        the prompt/voice refresh immediately, but no character_switched
+        broadcast fires — the panel stays put, no chat-log wipe/replay."""
+        mid = msg.get('_id')
+        ok, res = self.characters.save(msg.get('id') or '', msg.get('data') or {})
+        if not ok:
+            await self.send(ws, {'type': 'error', 'code': 'character',
+                                 'message': res, '_id': mid})
+            return
+        reloaded = False
+        if res == self.current_character_id:
+            self.character_meta = self.apply_character(res)
+            reloaded = True
+        await self.send(ws, {'type': 'characters',
+                             'items': self.characters.summary(),
+                             'current': self.current_character_id,
+                             'saved': res, 'reloaded': reloaded, '_id': mid})
+
+    async def _delete_character(self, ws, msg):
+        """Remove a character profile (Phase 40). Deleting the LIVE
+        character switches back to the primary FIRST (broadcast; the panel
+        handles the chat refresh), then drops the profile file. The
+        character's own history/memory files are kept — same-id recreation
+        gets its memory back."""
+        mid = msg.get('_id')
+        cid = str(msg.get('id') or '').strip()
+        err = self.characters.can_delete(cid)
+        if err:
+            await self.send(ws, {'type': 'error', 'code': 'character',
+                                 'message': err, '_id': mid})
+            return
+        switched = False
+        if cid == self.current_character_id:
+            meta = self.apply_character(PRIMARY_ID)
+            await self.broadcast({'type': 'character_switched', 'character': meta})
+            switched = True
+        self.characters.delete(cid)
+        await self.send(ws, {'type': 'characters',
+                             'items': self.characters.summary(),
+                             'current': self.current_character_id,
+                             'deleted': cid, 'switched': switched, '_id': mid})
+
     async def broadcast(self, obj):
         """Push a message to every connected client (broadcast events like
         character_switched / reminder_added must reach all renderers)."""
@@ -320,8 +364,16 @@ class BackendServer:
         elif mtype == 'get_characters':
             await self.send(ws, {'type': 'characters', 'items': self.characters.summary(),
                                  'current': self.current_character_id, '_id': mid})
+        elif mtype == 'get_character':
+            cid = str(msg.get('id') or '').strip()
+            await self.send(ws, {'type': 'character', 'id': cid,
+                                 'profile': self.characters.get(cid) or None, '_id': mid})
         elif mtype == 'switch_character':
             await self._switch_character(ws, msg)
+        elif mtype == 'save_character':
+            await self._save_character(ws, msg)
+        elif mtype == 'delete_character':
+            await self._delete_character(ws, msg)
         elif mtype == 'user_message':
             await self.handle_chat(ws, msg.get('text', ''), mid, screen=msg.get('screen'))
         elif mtype == 'screenshot':
