@@ -26,8 +26,8 @@ html,body {
 .toast {
   padding:10px 18px; border-radius:10px; font-size:13px; line-height:1.4; max-width:420px; text-align:center;
   overflow-wrap:anywhere; word-break:break-word;
-  background:rgba(35,28,45,.85); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 6px 20px rgba(0,0,0,.35); animation:toastIn .25s ease; pointer-events:auto;
+  background:rgba(35,28,45,.97); border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 3px 12px rgba(0,0,0,.3); animation:toastIn .25s ease; pointer-events:auto;
 }
 .toast.error { background:rgba(120,30,40,.9); }
 .toast.ok { background:rgba(40,100,60,.9); }
@@ -38,7 +38,7 @@ html,body {
 .rec-indicator {
   position:fixed; top:24px; right:30px; z-index:50;
   display:flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px;
-  background:rgba(180,40,60,.8); backdrop-filter:blur(6px); font-size:13px;
+  background:rgba(150,36,54,.96); font-size:13px;
   transition:opacity .3s;
 }
 .rec-indicator .dot { width:8px;height:8px;border-radius:50%;background:#ff4060;animation:pulse 1s infinite; }
@@ -66,7 +66,9 @@ html,body {
   /* bar bottom = feet y + 4px gap */
   bottom: calc((100vh - var(--av-feet-y, 810px)) + 4px);
   display:flex; flex-direction:column; gap:6px; padding:6px; border-radius:18px;
-  background:rgba(30,25,38,.55); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.08);
+  /* solid bar (10-17 user report): the old .55 blur let background text
+     bleed through — visual noise. Opaque, no backdrop-filter. */
+  background:rgba(26,21,34,.96); border:1px solid rgba(255,255,255,.08);
   transition:opacity .35s ease;
 }
 .toolbar button {
@@ -82,8 +84,12 @@ html,body {
   bottom: calc((100vh - var(--av-head-y, 320px)) + 92px);
   /* never overflow the window top: cap by the room above her head */
   width:360px; max-height:min(60vh, calc(var(--av-head-y, 320px) - 96px)); border-radius:16px; overflow:hidden;
-  background:rgba(28,22,36,.88); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.1);
-  box-shadow:0 12px 40px rgba(0,0,0,.4);
+  /* solid panel (10-17 user report "半透明的背景阴影"): the old .88 +
+     blur(16px) + 40px shadow let whatever sits behind (other windows'
+     text, the wallpaper) bleed through as a muddy halo. Opaque base,
+     no backdrop-filter, minimal shadow. */
+  background:rgba(26,21,34,.97); border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 3px 12px rgba(0,0,0,.3);
   transition:opacity .25s ease, transform .25s ease;
 }
 .panel:not(.hidden) { animation:panelIn .25s ease; }
@@ -170,7 +176,7 @@ html,body {
   left: calc(var(--av-x, 1370px) - 140px);
   bottom: calc((100vh - var(--av-head-y, 320px)) + 92px);
   display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:20px;
-  background:rgba(28,22,36,.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.1);
+  background:rgba(26,21,34,.96); border:1px solid rgba(255,255,255,.1);
   transition:opacity .25s;
 }
 .costume-bar .cb-title { font-size:12px; color:#aaa; padding:0 4px; }
@@ -186,7 +192,7 @@ html,body {
   left: calc(var(--av-x, 1370px) - 200px);
   bottom: calc((100vh - var(--av-head-y, 320px)) + 58px);
   display:flex; align-items:center; gap:8px; padding:5px 10px; border-radius:14px;
-  background:rgba(60,30,50,.92); backdrop-filter:blur(12px); border:1px solid rgba(255,120,170,.55);
+  background:rgba(60,30,50,.96); border:1px solid rgba(255,120,170,.55);
   color:#ffd7e8; font-size:12px; white-space:nowrap;
 }
 .screen-chip button { border:none; background:rgba(255,255,255,.12); color:#fff; border-radius:50%;
