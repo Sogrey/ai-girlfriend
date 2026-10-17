@@ -127,6 +127,17 @@
         </label>
       </div>
 
+      <!-- Memory view (Phase 41): any roster member's long-term memory,
+           reachable from the 🧠 button on its row -->
+      <div id="char-memory" class="hidden">
+        <div class="char-form-title" id="char-mem-title">长期记忆</div>
+        <div id="char-mem-items"></div>
+        <div class="settings-actions">
+          <button id="char-mem-clear" type="button" class="danger">清除她的记忆</button>
+          <button id="char-mem-back" type="button">返回</button>
+        </div>
+      </div>
+
       <div id="char-form" class="hidden">
         <div class="char-form-title" id="char-form-title">新建角色</div>
         <label>显示名字（必填）

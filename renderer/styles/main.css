@@ -237,6 +237,18 @@ html,body {
 }
 .cb-manage:hover { border-color:rgba(255,120,170,.6) !important; color:#fff !important; }
 
+/* memory view + row 🧠 badge (Phase 41) */
+.char-actions button.mem { background:rgba(120,180,255,.2); color:#dce9ff; }
+.char-actions button.mem:hover { background:rgba(120,180,255,.4); }
+#char-memory { border-top:1px solid rgba(255,255,255,.1); padding-top:10px; }
+#char-memory .mem-item {
+  padding:7px 10px; margin-bottom:6px; border-radius:8px; font-size:13px; color:#ddd;
+  background:rgba(120,180,255,.08); border:1px solid rgba(120,180,255,.15);
+}
+#char-memory .settings-actions { margin-top:10px; }
+#char-memory button.danger { background:rgba(160,50,60,.45); }
+#char-memory button.danger:hover { background:rgba(190,60,70,.65); }
+
 /* ---------- Settings ---------- */
 .settings-body { padding:12px 16px; max-height:calc(min(60vh, var(--av-head-y, 320px) - 96px) - 96px); overflow-y:auto; }
 fieldset { border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:12px; margin-bottom:12px; }

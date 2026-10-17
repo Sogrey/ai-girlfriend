@@ -25,6 +25,7 @@ class WhisperEngine:
         self.compute_type = None
         self.ready = False
         self.error = None
+        self.note = None   # non-fatal degrade notice (rides status once)
         self._last_load_time = 0
 
     def _add_cuda_dlls(self):
@@ -70,12 +71,22 @@ class WhisperEngine:
             logger.warning('CUDA DLL discovery failed: %s', e)
 
     def load(self):
-        """Load (or reload) the whisper model according to config. Safe to call repeatedly."""
+        """Load (or reload) the whisper model according to config. Safe to call repeatedly.
+
+        DEGRADE CHAIN (10-17): a single CUDA->CPU fallback is not enough on
+        a 6GB GPU shared with the GPT-SoVITS voice service (~2.1GB resident)
+        and a 15GB RAM box running Electron: float16 OOMs on CUDA and int8
+        OOMs on system RAM. We now walk a resource-lighter chain and keep
+        the FIRST combo that loads:
+          cuda float16 -> cuda int8 -> cpu int8 -> cpu int8 (one model
+          smaller: base -> tiny), each attempt tightening the budget.
+        The user-visible error becomes an actionable hint instead of the
+        raw exception soup."""
         model_name = self.config.get('model', 'small')
         device = self.config.get('device', 'auto')
         compute_type = self.config.get('compute_type', 'auto')
 
-        if device == 'auto' or compute_type == 'auto':
+        if device in ('auto', 'cuda') or compute_type == 'auto':
             self._add_cuda_dlls()
             cuda_ok = False
             try:
@@ -92,31 +103,43 @@ class WhisperEngine:
         self.model = None
         self.ready = False
         t0 = time.time()
-        logger.info('loading whisper model=%s device=%s compute_type=%s', model_name, device, compute_type)
-        try:
-            from faster_whisper import WhisperModel
-            self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
-            self.device = device
-            self.compute_type = compute_type
-            self.ready = True
-            self.error = None
-            logger.info('whisper ready on %s (%s) in %.1fs', device, compute_type, time.time() - t0)
-        except Exception as e:
-            self.error = str(e)
-            logger.error('whisper load failed on %s: %s', device, e)
-            if device != 'cpu':
-                logger.info('falling back to CPU int8')
-                try:
-                    from faster_whisper import WhisperModel
-                    self.model = WhisperModel(model_name, device='cpu', compute_type='int8')
-                    self.device = 'cpu'
-                    self.compute_type = 'int8'
-                    self.ready = True
-                    self.error = None
-                    logger.info('whisper ready on CPU int8 (fallback)')
-                except Exception as e2:
-                    self.error = f'CUDA 失败: {e} | CPU fallback 也失败: {e2}'
-                    logger.error(self.error)
+
+        # candidate chain from heaviest to lightest
+        candidates = [(model_name, device, compute_type)]
+        if device == 'cuda' and compute_type != 'int8':
+            candidates.append((model_name, 'cuda', 'int8'))
+        if device != 'cpu' or compute_type != 'int8':
+            candidates.append((model_name, 'cpu', 'int8'))
+        # memory-tight last resort: step the MODEL down too (keep order stable for tiny)
+        for smaller in ('base', 'tiny'):
+            if smaller != model_name:
+                candidates.append((smaller, 'cpu', 'int8'))
+
+        attempts = []
+        for m, d, c in candidates:
+            try:
+                from faster_whisper import WhisperModel
+                logger.info('loading whisper model=%s device=%s compute_type=%s', m, d, c)
+                self.model = WhisperModel(m, device=d, compute_type=c)
+                self.device = d
+                self.compute_type = c
+                self.ready = True
+                self.note = None
+                if m != model_name or (d, c) != (device, compute_type):
+                    self.note = ('语音识别已降级运行（%s/%s%s）以适配显存/内存。'
+                                 '如需全速可在设置→语音识别里换更小的模型。'
+                                 % (d, c, '' if m == model_name else '，模型 ' + m))
+                    logger.warning(self.note)
+                self.error = None
+                logger.info('whisper ready on %s %s (%s) in %.1fs', m, d, c, time.time() - t0)
+                return
+            except Exception as e:
+                attempts.append('%s/%s/%s: %s' % (m, d, c, e))
+                logger.warning('whisper attempt failed %s/%s/%s: %s', m, d, c, e)
+        self.error = ('语音识别引擎启动失败：显存或内存不足（本地语音服务会占用较多资源）。'
+                      '可到 设置 → 语音识别 把模型换成 base 或 tiny 再试；'
+                      '或暂时把语音合成切到 Edge 在线，释放本地资源。')
+        logger.error('all whisper candidates failed:\n%s', '\n'.join(attempts))
 
     def reload_config(self, config):
         stt = config.get('stt', {})

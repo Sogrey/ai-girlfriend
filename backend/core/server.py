@@ -20,6 +20,12 @@ Renderer -> Backend:
   {type:'get_reminders'}                      # -> {type:'reminders', items}
   {type:'add_reminder', rtype:'once|daily|hourly', text, at|hhmm|minute, emotion}
   {type:'delete_reminder', id}
+  {type:'switch_character', id}                # switch the live persona (Phase 39)
+  {type:'save_character', id?, data}           # create/update a profile (Phase 40)
+  {type:'delete_character', id}                # remove a profile (Phase 40)
+  {type:'get_character', id}                   # -> {type:'character', profile} for the editor
+  {type:'get_character_memory', id}            # -> {type:'character_memory', items} any roster member (Phase 41)
+  {type:'clear_character_memory', id}          # wipe one character's long-term memory (Phase 41)
   {type:'reload_config'}
   {type:'ping'}            -> {type:'pong'}
 
@@ -57,6 +63,7 @@ from llm.manager import LLMManager
 from stt.whisper_engine import WhisperEngine
 from tts.manager import TTSManager, TTSSilentError
 from conversation.manager import ConversationManager
+from conversation.memory import MemoryStore
 from vision.provider import VisionProvider
 
 logger = logging.getLogger('server')
@@ -168,10 +175,7 @@ class BackendServer:
         if res == self.current_character_id:
             self.character_meta = self.apply_character(res)
             reloaded = True
-        await self.send(ws, {'type': 'characters',
-                             'items': self.characters.summary(),
-                             'current': self.current_character_id,
-                             'saved': res, 'reloaded': reloaded, '_id': mid})
+        await self.send(ws, self._roster_payload(saved=res, reloaded=reloaded, _id=mid))
 
     async def _delete_character(self, ws, msg):
         """Remove a character profile (Phase 40). Deleting the LIVE
@@ -192,10 +196,41 @@ class BackendServer:
             await self.broadcast({'type': 'character_switched', 'character': meta})
             switched = True
         self.characters.delete(cid)
-        await self.send(ws, {'type': 'characters',
-                             'items': self.characters.summary(),
-                             'current': self.current_character_id,
-                             'deleted': cid, 'switched': switched, '_id': mid})
+        await self.send(ws, self._roster_payload(deleted=cid, switched=switched, _id=mid))
+
+    # ---------------- per-character memory (Phase 41) ----------------
+
+    def _character_memory_store(self, cid):
+        """MemoryStore view of ANY character's memory file — the LIVE
+        instance for the current role (its in-memory facts are the source
+        of truth), a fresh file-backed read for everyone else. Raises
+        ValueError for unknown ids so callers never silently fall back to
+        the primary's legacy file."""
+        cid = str(cid or '').strip()
+        if cid == self.current_character_id:
+            return self.conv.memory
+        if not self.characters.exists(cid):
+            raise ValueError('未知的角色: %s' % cid)
+        _, mem_path, _ = self.characters.persistence_paths(cid)
+        return MemoryStore(self.config, path=mem_path)
+
+    def _character_mem_count(self, cid):
+        try:
+            return len(self._character_memory_store(cid).facts)
+        except Exception:
+            return 0
+
+    def _roster_payload(self, **extra):
+        """Roster reply frame with per-character memory counts riding every
+        item (the manager rows show 🧠 N badges; all roster-shape replies go
+        through here so counts never go stale between panel actions)."""
+        items = self.characters.summary()
+        for it in items:
+            it['mem_count'] = self._character_mem_count(it['id'])
+        payload = {'type': 'characters', 'items': items,
+                   'current': self.current_character_id}
+        payload.update(extra)
+        return payload
 
     async def broadcast(self, obj):
         """Push a message to every connected client (broadcast events like
@@ -279,6 +314,7 @@ class BackendServer:
             'stt_ready': self.stt.ready,
             'stt_device': self.stt.device,
             'stt_error': self.stt.error,
+            'stt_note': getattr(self.stt, 'note', None),   # degrade hint (10-17)
             'llm_provider': self.llm.provider_name,
             'tts_provider': self.tts.provider_name,
             'character': {'id': self.current_character_id,
@@ -361,9 +397,28 @@ class BackendServer:
         elif mtype == 'clear_memory':
             self.conv.memory.clear()
             await self.send(ws, {'type': 'memory_cleared', '_id': mid})
+        elif mtype == 'get_character_memory':
+            # per-character memory view (Phase 41): any roster member, not
+            # just the live one — the manager rows each get a 🧠 button
+            try:
+                store = self._character_memory_store(msg.get('id'))
+            except ValueError as e:
+                await self.send(ws, {'type': 'error', 'code': 'character',
+                                     'message': str(e), '_id': mid})
+                return
+            await self.send(ws, {'type': 'character_memory', 'id': msg.get('id'),
+                                 'items': store.to_list(), '_id': mid})
+        elif mtype == 'clear_character_memory':
+            try:
+                store = self._character_memory_store(msg.get('id'))
+            except ValueError as e:
+                await self.send(ws, {'type': 'error', 'code': 'character',
+                                     'message': str(e), '_id': mid})
+                return
+            store.clear()
+            await self.send(ws, self._roster_payload(cleared=msg.get('id'), _id=mid))
         elif mtype == 'get_characters':
-            await self.send(ws, {'type': 'characters', 'items': self.characters.summary(),
-                                 'current': self.current_character_id, '_id': mid})
+            await self.send(ws, self._roster_payload(_id=mid))
         elif mtype == 'get_character':
             cid = str(msg.get('id') or '').strip()
             await self.send(ws, {'type': 'character', 'id': cid,

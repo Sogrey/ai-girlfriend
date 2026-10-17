@@ -216,8 +216,15 @@ async function boot() {
   bus.on('backend:tts_audio', (msg) => {
     lipsync.speak(msg.data, { seq: msg.seq || 0, final: msg.final !== false });
   });
+  let lastSttToast = '';   // dedupe STT toasts across status re-pushes
   bus.on('backend:status', (msg) => {
-    if (msg.stt_ready === false) show('语音识别引擎: ' + (msg.stt_error || '未就绪'), 'warn', 4000);
+    const toast = msg.stt_ready === false
+      ? ('语音识别引擎: ' + (msg.stt_error || '未就绪'))
+      : (msg.stt_note || '');
+    if (toast && toast !== lastSttToast) {
+      lastSttToast = toast;
+      show(toast, 'warn', 6000);
+    }
     if (msg.character) applySwitchedCharacter(msg.character);   // boot/first contact
   });
   bus.on('backend:error', (msg) => {
@@ -257,8 +264,9 @@ async function boot() {
   }
 
   // ---- main loop ----
-  let uiVarsT = 0;
   let fpsAcc = 0, fpsCount = 0, fpsSum = 0, fpsSumN = 0, fpsMin = Infinity, fpsMax = 0;
+  // UI anchor state: held solid inside a slack band, re-anchored on real moves
+  let uiSmooth = null;
   sm.onFrame((dt) => {
     const gaze = eye.update(dt);
     // speech gesturing: while TTS is playing her idle pose gets light gestures
@@ -271,21 +279,38 @@ async function boot() {
     avatar.update(dt);   // sync normalized bones -> raw bones, springbones, expressions
     avatar.tickOpacity(dt);
 
-    // Anchor the UI refresh CSS vars (throttled - they only change on
-    // drag/resize anyway): --av-x/--av-head-y keep the panels above her
+    // Anchor the UI CSS vars: --av-x/--av-head-y keep the panels above her
     // head, --av-feet-y pins the vertical toolbar to her lower-right side.
-    uiVarsT += dt;
-    if (uiVarsT > 0.25 && avatar.hasModel()) {
-      uiVarsT = 0;
+    // ANCHOR-AND-HOLD with hysteresis (10-17, 2nd user report "很晃眼，
+    // 让位置相对固定"): idle breathing & hair physics wobble the bone
+    // projections by only a few px, so the anchor is held ROCK-SOLID inside
+    // a slack band (~14px) and only re-anchors on a genuine displacement
+    // (window drag / costume swap / model switch), where it snaps per-frame
+    // so following a drag stays glued. The earlier per-frame exponential
+    // trail still drifted continuously — smooth motion is still motion.
+    if (avatar.hasModel()) {
       try {
         const head = sm.worldToScreen(avatar.headWorldPos());
-        const foot = sm.worldToScreen(avatar.chestWorldPos());
+        const chest = sm.worldToScreen(avatar.chestWorldPos());
         const feet = sm.worldToScreen(avatar.footWorldPos());
-        const root = document.documentElement.style;
-        root.setProperty('--av-head-y', `${Math.round(head.y)}px`);
-        root.setProperty('--av-x', `${Math.round((head.x + foot.x) / 2)}px`);
-        // guard: foot bone projection should never sit above the head
-        root.setProperty('--av-feet-y', `${Math.round(Math.max(feet.y, head.y + 100))}px`);
+        const target = {
+          headY: head.y,
+          x: (head.x + chest.x) / 2,
+          // guard: foot bone projection should never sit above the head
+          feetY: Math.max(feet.y, head.y + 100),
+        };
+        const SLACK = 14;
+        const moved = !uiSmooth
+          || Math.abs(target.x - uiSmooth.x) > SLACK
+          || Math.abs(target.headY - uiSmooth.headY) > SLACK
+          || Math.abs(target.feetY - uiSmooth.feetY) > SLACK;
+        if (moved) {
+          uiSmooth = { ...target };   // (re)anchor — inside the band: no writes at all
+          const root = document.documentElement.style;
+          root.setProperty('--av-head-y', `${Math.round(uiSmooth.headY)}px`);
+          root.setProperty('--av-x', `${Math.round(uiSmooth.x)}px`);
+          root.setProperty('--av-feet-y', `${Math.round(uiSmooth.feetY)}px`);
+        }
       } catch {}
     }
 

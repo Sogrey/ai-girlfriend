@@ -88,18 +88,24 @@ export class MouseInteractionController {
 
   // Cursor over (or near) interactive UI elements?
   // - toolbar counts even while hidden: hovering its area summons it
-  //   (mouseGlobal is in window/DIP coords, same as getBoundingClientRect)
-  // - open panels count only while visible, so clicks on chat/settings/
-  //   costume widgets never fall through to the desktop
+  //   (mouseLocal is in window/DIP coords, same as getBoundingClientRect)
+  // - every VISIBLE interactive surface counts: panels, quick bars, chips.
+  //   Discovery is SELECTOR-based (.panel/.costume-bar/.screen-chip) so new
+  //   UI can never be forgotten again — the old hard-coded ID list missed
+  //   reminder-panel (P32), character-bar (P39) and character-panel (P40),
+  //   leaving them click-through for REAL mouse users while CDP (`el.click()`
+  //   injection bypasses the OS-level ignore) kept passing (10-17 lesson).
   _uiHover() {
     const m = this.mouseLocal;
-    for (const id of ['toolbar', 'chat-panel', 'settings-panel', 'costume-bar']) {
-      const el = document.getElementById(id);
-      if (!el) continue;
-      const visible = !el.classList.contains('hidden');
-      if (id !== 'toolbar' && !visible) continue;
+    const els = [
+      document.getElementById('toolbar'),
+      ...document.querySelectorAll(
+        '.panel:not(.hidden), .costume-bar:not(.hidden), .screen-chip:not(.hidden)'),
+    ];
+    const margin = 20; // px buffer around the element
+    for (const el of els) {
+      if (!el || (el.id !== 'toolbar' && el.classList.contains('hidden'))) continue;
       const r = el.getBoundingClientRect();
-      const margin = 20; // px buffer around the element
       if (m.x >= r.left - margin && m.x <= r.right + margin &&
           m.y >= r.top - margin && m.y <= r.bottom + margin) {
         return true;

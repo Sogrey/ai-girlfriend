@@ -9,12 +9,13 @@ import { bus } from '../core/EventBus.js';
 //              per-row edit & delete buttons + "new character" action
 //   form mode: name (required), optional id (new only), desc, system
 //              prompt (load-default helper), exclusive model & voice
-let panelEl, listEl, formEl, listWrapEl;
+let panelEl, listEl, formEl, listWrapEl, memoryEl;
 let backendRef = null;
 let open = false;
 let editingId = null;      // null = creating
 let currentId = null;
 let promptDefault = '';
+let memoryChar = null;      // {id, name} while the memory view is open
 
 function byId(id) { return document.getElementById(id); }
 
@@ -27,6 +28,7 @@ export function initCharacterPanel({ backend }) {
   listEl = byId('char-list');
   listWrapEl = byId('char-list-wrap');
   formEl = byId('char-form');
+  memoryEl = byId('char-memory');
 
   panelEl?.querySelector('.panel-close')?.addEventListener('click', () => toggle(false));
   byId('char-new')?.addEventListener('click', () => showForm(null));
@@ -49,7 +51,11 @@ export function initCharacterPanel({ backend }) {
     const cid = btn.dataset.charId;
     if (btn.dataset.charAct === 'edit') editCharacter(cid);
     else if (btn.dataset.charAct === 'del') deleteCharacter(cid);
+    else if (btn.dataset.charAct === 'mem') showMemory(cid);
   });
+
+  byId('char-mem-back')?.addEventListener('click', () => showList());
+  byId('char-mem-clear')?.addEventListener('click', () => memoryChar && clearMemory(memoryChar.id, memoryChar.name));
 
   return toggle;   // app.js wires bus('characters:manage') onto this
 }
@@ -71,6 +77,8 @@ export function toggle(force) {
 
 async function showList() {
   formEl?.classList.add('hidden');
+  memoryEl?.classList.add('hidden');
+  memoryChar = null;
   listWrapEl?.classList.remove('hidden');
   await refreshList();
 }
@@ -128,6 +136,17 @@ function renderList(items, current) {
     row.appendChild(info);
     const actions = document.createElement('div');
     actions.className = 'char-actions';
+    // 🧠 memory entry on EVERY row (Phase 41): the default character's
+    // profile is locked to the settings panel, but her memory is still
+    // viewable/clearable here
+    const mb = document.createElement('button');
+    mb.type = 'button';
+    mb.className = 'mem';
+    mb.dataset.charAct = 'mem';
+    mb.dataset.charId = c.id;
+    mb.title = '查看她的长期记忆';
+    mb.textContent = '🧠 ' + (typeof c.mem_count === 'number' ? c.mem_count : '');
+    actions.appendChild(mb);
     if (c.primary) {
       const hint = document.createElement('span');
       hint.className = 'hint';
@@ -150,6 +169,59 @@ function renderList(items, current) {
     }
     row.appendChild(actions);
     listEl.appendChild(row);
+  }
+}
+
+// ---------- memory view (Phase 41) ----------
+
+async function showMemory(cid) {
+  let items = null, name = cid;
+  try {
+    const [mem, roster] = await Promise.all([
+      backendRef.request({ type: 'get_character_memory', id: cid }),
+      backendRef.request({ type: 'get_characters' }),
+    ]);
+    items = mem.items || [];
+    name = ((roster.items || []).find((x) => x.id === cid) || {}).name || cid;
+  } catch (e) {
+    bus.emit('toast:show', { text: '记忆读取失败: ' + (e.message || e), kind: 'error', ms: 4000 });
+    return;
+  }
+  memoryChar = { id: cid, name };
+  const title = byId('char-mem-title');
+  if (title) title.textContent = '「' + name + '」的长期记忆';
+  const list = byId('char-mem-items');
+  if (list) {
+    list.innerHTML = '';
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'hint';
+      empty.style.padding = '10px 4px';
+      empty.textContent = '还没有记住关于你的任何事。聊天的时侯透露点自己的事，她会长久记下来。';
+      list.appendChild(empty);
+    }
+    for (const it of items) {
+      const li = document.createElement('div');
+      li.className = 'mem-item';
+      li.textContent = it.text || '';
+      list.appendChild(li);
+    }
+  }
+  const clearBtn = byId('char-mem-clear');
+  if (clearBtn) clearBtn.style.display = items.length ? '' : 'none';
+  listWrapEl?.classList.add('hidden');
+  formEl?.classList.add('hidden');
+  memoryEl?.classList.remove('hidden');
+}
+
+async function clearMemory(cid, name) {
+  if (!window.confirm('让「' + name + '」忘掉全部长期记忆吗？（对话历史不受影响）')) return;
+  try {
+    await backendRef.request({ type: 'clear_character_memory', id: cid });
+    bus.emit('toast:show', { text: '已清除「' + name + '」的长期记忆', kind: 'ok', ms: 2200 });
+    await showList();
+  } catch (e) {
+    bus.emit('toast:show', { text: '清除失败: ' + (e.message || e), kind: 'error', ms: 4000 });
   }
 }
 
@@ -189,6 +261,7 @@ function showForm(cid, full = {}) {
   }
   updatePromptCount();
   listWrapEl?.classList.add('hidden');
+  memoryEl?.classList.add('hidden');
   formEl?.classList.remove('hidden');
 }
 
